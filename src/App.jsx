@@ -364,22 +364,23 @@ function App() {
         setIsFirebaseReady(true);
         if (token) setWorkspaceToken(token);
         
+        const emailKey = user.email ? user.email.trim().toLowerCase() : '';
         try {
-          console.log("1. Fetching users doc for:", user.email);
-          const userDoc = await getDoc(doc(db, "users", user.email));
+          console.log("1. Fetching users doc for:", emailKey);
+          const userDoc = await getDoc(doc(db, "users", emailKey));
           console.log("1. Result:", userDoc.exists());
           
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            if (userData.isApproved) {
-              setCurrentUser(userData);
+            if (userData.isApproved || userData.status === 'Active' || userData.status === undefined) {
+              setCurrentUser({ ...userData, isApproved: true });
             } else {
               logout();
-              setLoginError("Your account has been disabled.");
+              setLoginError("Your account has been disabled or deactivated.");
             }
           } else {
-            console.log("2. Fetching pendingUsers doc for:", user.email);
-            const pendingDoc = await getDoc(doc(db, "pendingUsers", user.email));
+            console.log("2. Fetching pendingUsers doc for:", emailKey);
+            const pendingDoc = await getDoc(doc(db, "pendingUsers", emailKey));
             console.log("2. Result:", pendingDoc.exists());
             
             if (pendingDoc.exists()) {
@@ -387,31 +388,33 @@ function App() {
               setLoginError("Your account is pending admin approval.");
             } else {
               console.log("3. User not found, checking admin conditions");
-              const isAdminEmail = user.email === "madhukagamage6@gmail.com" || user.email === "madhukagamage@gmail.com";
+              const isAdminEmail = emailKey === "madhukagamage6@gmail.com" || emailKey === "madhukagamage@gmail.com";
               
               if (token || isAdminEmail) {
                 console.log("4. Creating new admin user profile");
                 const newUser = {
-                  identifier: user.email,
+                  identifier: emailKey,
                   password: "",
-                  name: user.displayName || user.email,
+                  name: user.displayName || emailKey,
                   role: isAdminEmail ? "Admin" : "Customer",
                   isApproved: true,
+                  status: 'Active',
                 };
-                await setDoc(doc(db, "users", user.email), newUser);
+                await setDoc(doc(db, "users", emailKey), newUser);
                 console.log("5. Created successfully");
                 setCurrentUser(newUser);
               } else {
                 console.log("4. Creating pendingUser profile");
                 const pendingUser = {
-                  identifier: user.email,
+                  identifier: emailKey,
                   password: "",
-                  name: user.displayName || user.email,
+                  name: user.displayName || emailKey,
                   role: "Customer",
+                  status: 'Pending',
                 };
-                await setDoc(doc(db, "pendingUsers", user.email), pendingUser);
+                await setDoc(doc(db, "pendingUsers", emailKey), pendingUser);
                 console.log("5. Created pending successfully");
-                logActivity(user.email, user.displayName, 'REGISTER', 'Auth', 'New user registered and is pending approval.');
+                logActivity(emailKey, user.displayName || emailKey, 'REGISTER', 'Auth', 'New user registered and is pending approval.');
                 logout();
                 setLoginError("Account pending admin approval. Please wait for an administrator to approve your account.");
               }
