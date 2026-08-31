@@ -14,7 +14,7 @@ export default function KanbanColumn({
   isDropTarget = false,
   onDragOver,
   onDrop,
-  minWidth = 'min-w-[320px]',
+  minWidth = 'w-[82vw] sm:w-[320px] min-w-[280px] sm:min-w-[320px] max-w-[85vw] sm:max-w-sm',
   className = '',
 }) {
   const getDotBg = () => {
@@ -44,11 +44,11 @@ export default function KanbanColumn({
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`flex flex-col ${minWidth} flex-1 max-w-sm bg-surface-container-low/70 rounded-2xl border ${
+      className={`flex flex-col ${minWidth} shrink-0 snap-start bg-surface-container-low/70 rounded-2xl border ${
         isDropTarget
           ? 'border-primary/80 ring-2 ring-primary/20 bg-surface-container-high/40'
           : 'border-outline-variant/60'
-      } p-4 h-full transition-all ${className}`}
+      } p-3 sm:p-4 h-full transition-all ${className}`}
     >
       {/* Column Header */}
       <div className="flex justify-between items-center mb-4 px-2 select-none">

@@ -86,21 +86,30 @@ export let triggerBrowserNotification = (t, e) => {
 };
 
 // Nav Link Component
-const NavLink = ({ icon: Icon, label, id, activeTab, setActiveTab, onClick, badge, collapsed }) => {
+const NavLink = ({ icon: Icon, label, id, activeTab, setActiveTab, onClick, badge, collapsed, onNavigate }) => {
   const isActive = activeTab === id;
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      setActiveTab(id);
+    }
+    if (onNavigate) onNavigate();
+  };
+
   return (
     <button
-      onClick={onClick || (() => setActiveTab(id))}
-      className={`w-full flex items-center rounded-lg transition-all duration-300 relative group ${
-        collapsed ? "justify-center p-3" : "px-4 py-3"
+      onClick={handleClick}
+      className={`w-full flex items-center rounded-xl transition-all duration-200 relative group min-h-[44px] ${
+        collapsed ? "justify-center p-3" : "px-4 py-2.5"
       } ${
         isActive
-          ? "bg-primary/10 text-primary border border-primary/30"
+          ? "bg-primary/10 text-primary border border-primary/30 font-bold"
           : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
       }`}
     >
       <div className="flex-shrink-0 relative">
-        <Icon size={20} className={isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"} />
+        <Icon size={18} className={isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"} />
         {/* Badge when collapsed */}
         <div className={`absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error text-on-error text-[8px] font-bold transition-opacity duration-300 ${collapsed && badge > 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
           {badge > 9 ? "9+" : badge}
@@ -108,11 +117,11 @@ const NavLink = ({ icon: Icon, label, id, activeTab, setActiveTab, onClick, badg
       </div>
       
       <div className={`flex items-center overflow-hidden transition-all duration-300 ease-in-out whitespace-nowrap ${collapsed ? "w-0 opacity-0 ml-0" : "w-auto opacity-100 ml-3 flex-1"}`}>
-        <span className="font-medium text-sm truncate flex-1 text-left">{label}</span>
+        <span className="font-medium text-xs truncate flex-1 text-left">{label}</span>
         
         {/* Badge when expanded */}
         {badge > 0 && (
-          <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-error text-on-error text-xs font-bold rounded-full">
+          <span className="ml-2 inline-flex items-center justify-center w-4 h-4 bg-error text-on-error text-[9px] font-black rounded-full">
             {badge > 99 ? "99+" : badge}
           </span>
         )}
@@ -592,36 +601,87 @@ function App() {
       {/* Grid background */}
       <div className="fixed inset-0 technical-grid opacity-15 pointer-events-none z-0"></div>
       
-      {/* Mobile Header */}
-      {!mobileMenuOpen && (
-        <div className="md:hidden fixed top-0 w-full bg-surface-container/60 backdrop-blur-md text-on-surface z-50 flex justify-between items-center p-4 border-b border-outline-variant/30">
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1 -ml-1">
-            <Menu size={24} />
+      {/* Mobile Top App Bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-surface-container/90 backdrop-blur-xl text-on-surface z-40 flex justify-between items-center px-4 border-b border-outline-variant/40 shadow-md">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setMobileMenuOpen(true)} 
+            className="p-2 -ml-1 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-xl border border-outline-variant/60 active:scale-95 cursor-pointer"
+            aria-label="Open Navigation Menu"
+          >
+            <Menu size={20} />
           </button>
-          <div className="font-bold text-lg flex items-center">
-            <img src="/logo-dark.png" alt="Print To Frame" className="h-8 w-auto" />
+          <div className="flex items-center gap-2">
+            <img src="/logo-dark.png" alt="Print To Frame" className="h-7 w-auto object-contain" />
           </div>
         </div>
-      )}
 
-      {/* Mobile Sidebar Overlay */}
+        <div className="flex items-center gap-2">
+          {/* Quick Notification Bell */}
+          <button
+            onClick={() => { setActiveTab('notifications'); setUnreadNotificationsCount(0); }}
+            className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-xl border border-outline-variant/60 relative active:scale-95 cursor-pointer"
+            aria-label="Notifications"
+          >
+            <Bell size={18} />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-error text-on-error text-[9px] font-black rounded-full flex items-center justify-center">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
+          {/* Quick Theme Switch */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-xl border border-outline-variant/60 active:scale-95 cursor-pointer"
+            aria-label="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-primary" />}
+          </button>
+
+          {/* User Avatar */}
+          <div 
+            onClick={() => setActiveTab('profile')}
+            className="cursor-pointer active:scale-95"
+            title="My Profile"
+          >
+            <UserAvatar user={currentUser} size="sm" showStatus status="active" />
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Drawer Backdrop Overlay */}
       {mobileMenuOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-surface-container-highest/80 backdrop-blur-sm z-30" 
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-200" 
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
-      {/* Sidebar Navigation */}
+      {/* Sidebar / Slide-in Mobile Drawer Navigation */}
       <div
         onMouseEnter={() => setIsHoveringSidebar(true)}
         onMouseLeave={() => setIsHoveringSidebar(false)}
         className={`fixed inset-y-0 left-0 transform ${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } md:relative md:translate-x-0 transition-all duration-300 ease-in-out z-40 md:z-10 ${
-          effectivelyCollapsed ? "w-20" : "w-64"
-        } bg-surface-container md:bg-surface-container/60 backdrop-blur-md text-on-surface flex flex-col h-[100dvh] md:h-full border-r border-outline-variant/30`}
+        } md:relative md:translate-x-0 transition-all duration-300 ease-in-out z-50 md:z-10 ${
+          effectivelyCollapsed ? "w-20" : "w-72 md:w-64"
+        } bg-surface-container/95 md:bg-surface-container/60 backdrop-blur-2xl md:backdrop-blur-md text-on-surface flex flex-col h-[100dvh] md:h-full border-r border-outline-variant/30 shadow-2xl md:shadow-none`}
       >
+        {/* Mobile Drawer Top Header (Close Button) */}
+        <div className="flex md:hidden h-16 shrink-0 justify-between items-center px-4 border-b border-outline-variant/40">
+          <img src="/logo-dark.png" alt="Print To Frame" className="h-7 w-auto object-contain" />
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-xl border border-outline-variant/60 active:scale-95 cursor-pointer"
+            aria-label="Close Navigation"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Desktop Logo Header */}
         <div className={`hidden md:flex h-20 md:h-28 shrink-0 justify-center items-center relative ${effectivelyCollapsed ? "px-2" : "px-6"} [@media(max-height:500px)]:h-16`}>
           {effectivelyCollapsed ? (
             <img src="/logo-dark.png" alt="Print To Frame" className="w-14 h-auto object-contain" />
@@ -630,18 +690,19 @@ function App() {
           )}
         </div>
 
-        <nav className={`flex-1 space-y-1 overflow-y-auto sidebar-scroll overflow-x-hidden pt-6 md:pt-0 pb-20 md:pb-0 ${effectivelyCollapsed ? "px-2" : "px-4"}`}>
+        <nav className={`flex-1 space-y-1 overflow-y-auto sidebar-scroll overflow-x-hidden pt-4 md:pt-0 pb-20 md:pb-0 ${effectivelyCollapsed ? "px-2" : "px-3 md:px-4"}`}>
           {/* Overview Group */}
           {(canAccess(currentUser?.role, 'dashboard') || canAccess(currentUser?.role, 'notifications')) && (
             <NavGroup title="Overview" isOpen={navGroupsOpen.overview} onToggle={() => toggleGroup("overview")} collapsed={effectivelyCollapsed}>
               {canAccess(currentUser?.role, 'dashboard') && (
-                <NavLink icon={LayoutDashboard} label="Dashboard" id="dashboard" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />
+                <NavLink icon={LayoutDashboard} label="Dashboard" id="dashboard" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
               )}
               {canAccess(currentUser?.role, 'notifications') && (
                 <NavLink
                   icon={Bell} label="Notifications" id="notifications" activeTab={activeTab}
                   setActiveTab={(id) => { setActiveTab(id); setUnreadNotificationsCount(0); }}
                   badge={unreadNotificationsCount} collapsed={effectivelyCollapsed}
+                  onNavigate={() => setMobileMenuOpen(false)}
                 />
               )}
             </NavGroup>
@@ -650,42 +711,42 @@ function App() {
           {/* CRM Group */}
           {(canAccess(currentUser?.role, 'leads') || canAccess(currentUser?.role, 'pipeline')) && (
             <NavGroup title="CRM" isOpen={navGroupsOpen.crm} onToggle={() => toggleGroup("crm")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'leads') && <NavLink icon={Target} label="Leads" id="leads" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
-              {canAccess(currentUser?.role, 'pipeline') && <NavLink icon={Kanban} label="Deals" id="pipeline" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
+              {canAccess(currentUser?.role, 'leads') && <NavLink icon={Target} label="Leads" id="leads" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'pipeline') && <NavLink icon={Kanban} label="Deals" id="pipeline" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
             </NavGroup>
           )}
 
           {/* Databases Group */}
           {(canAccess(currentUser?.role, 'customers') || canAccess(currentUser?.role, 'agents') || canAccess(currentUser?.role, 'partners') || canAccess(currentUser?.role, 'invoices')) && (
             <NavGroup title="Databases" isOpen={navGroupsOpen.databases} onToggle={() => toggleGroup("databases")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customer Database" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
-              {canAccess(currentUser?.role, 'agents') && <NavLink icon={Users} label="User Management" id="agents" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
-              {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partner Database" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
-              {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices Database" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
+              {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customer Database" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'agents') && <NavLink icon={Users} label="User Management" id="agents" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partner Database" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices Database" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
             </NavGroup>
           )}
 
           {/* Operations Group */}
           {(canAccess(currentUser?.role, 'projects') || canAccess(currentUser?.role, 'logistics')) && (
             <NavGroup title="Operations" isOpen={navGroupsOpen.ops} onToggle={() => toggleGroup("ops")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'projects') && <NavLink icon={Hammer} label="Fabrication Works" id="projects" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
-              {canAccess(currentUser?.role, 'logistics') && <NavLink icon={Truck} label="Logistics" id="logistics" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
+              {canAccess(currentUser?.role, 'projects') && <NavLink icon={Hammer} label="Fabrication Works" id="projects" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'logistics') && <NavLink icon={Truck} label="Logistics" id="logistics" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
             </NavGroup>
           )}
 
           {/* Tools Group */}
           {(canAccess(currentUser?.role, 'calculator') || canAccess(currentUser?.role, 'messages')) && (
             <NavGroup title="Tools" isOpen={navGroupsOpen.tools} onToggle={() => toggleGroup("tools")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'calculator') && <NavLink icon={Calculator} label="Cost Calculator" id="calculator" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
-              {canAccess(currentUser?.role, 'messages') && <NavLink icon={MessageSquare} label="Messages" id="messages" activeTab={activeTab} setActiveTab={setActiveTab} badge={unreadMessages} collapsed={effectivelyCollapsed} />}
+              {canAccess(currentUser?.role, 'calculator') && <NavLink icon={Calculator} label="Cost Calculator" id="calculator" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'messages') && <NavLink icon={MessageSquare} label="Messages" id="messages" activeTab={activeTab} setActiveTab={setActiveTab} badge={unreadMessages} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
             </NavGroup>
           )}
 
           {/* System & Profile Group */}
           <NavGroup title="Settings" isOpen={navGroupsOpen.system} onToggle={() => toggleGroup("system")} collapsed={effectivelyCollapsed}>
-            <NavLink icon={User} label="My Profile" id="profile" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />
+            <NavLink icon={User} label="My Profile" id="profile" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
             {canAccess(currentUser?.role, 'admin') && (
-              <NavLink icon={Shield} label="System Overview" id="admin" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />
+              <NavLink icon={Shield} label="System Overview" id="admin" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
             )}
             <NavLink
               icon={LogOut}
@@ -694,23 +755,10 @@ function App() {
               onClick={handleSignOut}
               activeTab={activeTab}
               collapsed={effectivelyCollapsed}
+              onNavigate={() => setMobileMenuOpen(false)}
             />
           </NavGroup>
         </nav>
-
-        {/* Vertical Center Collapse Button (Mobile) */}
-        {!isIframePreview && (
-          <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isMobile) { setMobileMenuOpen(!mobileMenuOpen); } else { setSidebarCollapsed(!sidebarCollapsed); }
-          }}
-          className="flex md:hidden absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-12 rounded-r-md rounded-l-none bg-surface-container-highest border border-l-0 border-outline-variant items-center justify-center text-on-surface hover:text-primary hover:border-primary/50 shadow-lg transition-all duration-200 z-50 cursor-pointer"
-          title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          {isMobile ? (mobileMenuOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />) : (sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />)}
-        </button>
-        )}
         
         {/* User Session profile and Theme Switcher */}
         <div className={`text-[10px] text-on-surface-variant border-t border-outline-variant/30 transition-all duration-300 ${effectivelyCollapsed ? "p-3 flex flex-col items-center space-y-3" : "p-4 md:p-5 [@media(max-height:500px)]:p-2 space-y-3"}`}>
@@ -783,7 +831,7 @@ function App() {
 
       {/* Main Content Area */}
       <main
-        className="flex-1 overflow-y-auto pt-20 md:pt-0 bg-transparent relative z-10"
+        className="flex-1 overflow-y-auto pt-16 md:pt-0 bg-transparent relative z-10 custom-scrollbar"
         onScroll={handleMainScroll}
         onClick={() => {
           if (!sidebarCollapsed) {
@@ -791,7 +839,7 @@ function App() {
           }
         }}
       >
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 md:p-10 relative min-h-full pb-20">
+        <div className="max-w-7xl mx-auto p-3 sm:p-5 md:p-8 lg:p-10 relative min-h-full pb-24 md:pb-20">
           <ErrorBoundary>
             <React.Suspense fallback={<LoadingSpinner message="Loading module..." />}>
             {activeTab === "dashboard" && canAccess(currentUser?.role, 'dashboard') && (

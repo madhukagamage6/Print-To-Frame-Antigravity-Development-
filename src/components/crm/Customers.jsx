@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, User, Building, Phone, Mail, Clock, FileText, Trash2, 
   Sparkles, MessageSquare, Check, X, DollarSign, MapPin, Plus, 
-  ChevronRight, Calendar, ExternalLink, Copy, ShieldCheck, Download, AlertTriangle, Camera
+  ChevronRight, Calendar, ExternalLink, Copy, ShieldCheck, Download, AlertTriangle, Camera, ArrowLeft
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { generateText } from '../../services/gemini';
@@ -17,6 +17,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
   const [showCreateModal, setShowCreateModal] = useState(false);
   const photoInputRef = useRef(null);
 
@@ -325,7 +326,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
       {/* Main Grid Content */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
         {/* Left Column: Client List */}
-        <div className="w-full lg:w-1/3 flex flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
+        <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
           <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
             <span className="flex items-center gap-2">
               <User size={14} className="text-primary" />
@@ -350,7 +351,10 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
                 return (
                   <div
                     key={customer.nic}
-                    onClick={() => setSelectedCustomer(customer)}
+                    onClick={() => {
+                      setSelectedCustomer(customer);
+                      setMobileView('detail');
+                    }}
                     className={`p-4 cursor-pointer transition-all flex items-center space-x-3.5 ${
                       isSelected 
                         ? 'bg-primary/10 border-l-4 border-primary shadow-inner' 
@@ -397,9 +401,17 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
         </div>
 
         {/* Right Column: Detailed Customer Profile Inspector */}
-        <div className="w-full lg:w-2/3 h-full overflow-y-auto custom-scrollbar pr-1">
+        <div className={`w-full lg:w-2/3 ${mobileView === 'list' ? 'hidden lg:block' : 'block'} h-full overflow-y-auto custom-scrollbar pr-1`}>
           {selectedCustomer ? (
             <div className="space-y-6">
+              {/* Mobile Back to List Button */}
+              <button 
+                onClick={() => setMobileView('list')}
+                className="lg:hidden flex items-center gap-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3.5 py-2 rounded-xl border border-primary/30 active:scale-95 transition-all w-fit cursor-pointer mb-2"
+              >
+                <ArrowLeft size={14} /> Back to Client Directory
+              </button>
+
               {/* Profile Master Card */}
               <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">

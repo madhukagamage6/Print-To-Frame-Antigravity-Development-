@@ -28,19 +28,19 @@ export default function FilterBar({
   return (
     <div className="bg-surface-container/60 p-3 sm:p-4 rounded-xl border border-outline-variant/60 mb-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-[0_2px_12px_rgba(0,0,0,0.15)]">
       {/* Left: Search input & filter pills */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
         {/* Search Input */}
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative flex-1 min-w-0 sm:max-w-xs">
           <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/70 pointer-events-none"
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/70 pointer-events-none"
           />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full pl-9 pr-9 py-2 bg-surface-container-high/80 border border-outline-variant rounded-lg text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 transition-all font-sans"
+            className="w-full pl-9 pr-8 py-2 bg-surface-container-high/80 border border-outline-variant rounded-xl text-xs sm:text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 transition-all font-sans"
           />
           {searchQuery && (
             <button

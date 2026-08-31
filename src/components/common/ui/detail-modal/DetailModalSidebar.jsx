@@ -6,7 +6,7 @@ import React from 'react';
  */
 export default function DetailModalSidebar({ children, className = '' }) {
   return (
-    <div className={`p-6 sm:p-8 space-y-6 lg:w-[420px] xl:w-[460px] flex-shrink-0 bg-surface-container-low/30 overflow-y-auto custom-scrollbar flex flex-col ${className}`}>
+    <div className={`p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 lg:w-[380px] xl:w-[440px] flex-shrink-0 bg-surface-container-low/30 overflow-y-auto custom-scrollbar flex flex-col ${className}`}>
       {children}
     </div>
   );

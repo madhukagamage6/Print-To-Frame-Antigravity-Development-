@@ -39,7 +39,7 @@ export default function ModalWrapper({
 
   return (
     <div 
-      className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-5 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center z-50 p-0 sm:p-3 md:p-5 animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
@@ -50,8 +50,12 @@ export default function ModalWrapper({
       }}
     >
       <div 
-        className={`bg-surface-container rounded-3xl w-full ${maxWidth} ${height} flex flex-col shadow-[0_15px_60px_rgba(0,0,0,0.6)] overflow-hidden border border-outline-variant/70 animate-in zoom-in-95 duration-200 text-on-surface ${className}`}
+        className={`bg-surface-container rounded-t-3xl sm:rounded-3xl w-full ${maxWidth} h-[95dvh] sm:h-[90vh] max-h-none sm:max-h-[920px] flex flex-col shadow-[0_15px_60px_rgba(0,0,0,0.6)] overflow-hidden border-t sm:border border-outline-variant/70 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 text-on-surface ${className}`}
       >
+        {/* Mobile top pull-indicator */}
+        <div className="flex sm:hidden justify-center pt-2 pb-1 bg-surface-container-low/60 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-outline-variant" />
+        </div>
         {children}
       </div>
     </div>

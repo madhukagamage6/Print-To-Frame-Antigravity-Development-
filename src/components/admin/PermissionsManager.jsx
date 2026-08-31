@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { usePermissions } from '../../context/PermissionsContext';
 import Card from '../common/Card';
 import { 
@@ -416,8 +416,12 @@ export default function PermissionsManager() {
       {activeCell && (
         <div
           ref={popoverRef}
-          className="fixed z-50 w-72 bg-surface-container-high border-2 border-primary/40 rounded-3xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.4)] animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
-          style={{
+          className="fixed z-50 w-[92vw] sm:w-72 max-w-sm bg-surface-container-high border-2 border-primary/40 rounded-3xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+          style={typeof window !== 'undefined' && window.innerWidth < 640 ? {
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+          } : {
             top: Math.min(window.innerHeight - 380, Math.max(20, activeCell.rect.bottom + 8)),
             left: Math.min(window.innerWidth - 300, Math.max(20, activeCell.rect.left - 100)),
           }}

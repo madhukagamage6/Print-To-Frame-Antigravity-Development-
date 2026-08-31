@@ -17,18 +17,18 @@ export default function PageHeader({
   tabs,
 }) {
   return (
-    <div className="flex flex-col gap-4 mb-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="flex flex-col gap-3 sm:gap-4 mb-5 sm:mb-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
         {/* Title & Subtitle */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-on-surface tracking-tight">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-on-surface tracking-tight leading-tight">
               {title}
             </h1>
             {metrics.map((m, idx) => (
               <span
                 key={idx}
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border ${
                   m.color === 'secondary' || m.color === 'emerald'
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                     : m.color === 'primary' || m.color === 'cyan'
@@ -38,13 +38,13 @@ export default function PageHeader({
                     : 'bg-surface-container-high text-on-surface-variant border-outline-variant'
                 }`}
               >
-                <span className="opacity-70 mr-1.5">{m.label}:</span>
+                <span className="opacity-70 mr-1">{m.label}:</span>
                 <span className="font-bold text-on-surface">{m.value}</span>
               </span>
             ))}
           </div>
           {subtitle && (
-            <p className="text-on-surface-variant text-sm mt-1 max-w-2xl leading-relaxed">
+            <p className="text-on-surface-variant text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
               {subtitle}
             </p>
           )}
@@ -52,7 +52,7 @@ export default function PageHeader({
 
         {/* Action Buttons */}
         {actions && (
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-start md:justify-end flex-shrink-0">
             {actions}
           </div>
         )}

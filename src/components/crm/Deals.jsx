@@ -432,8 +432,8 @@ export default function Deals({
 
       {/* View Content: Board vs Table */}
       {viewMode === 'kanban' ? (
-        <div className="flex-1 overflow-x-auto pb-4 custom-scrollbar">
-          <div className="flex space-x-5 h-full min-w-max">
+        <div className="flex-1 overflow-x-auto pb-4 custom-scrollbar snap-x snap-mandatory">
+          <div className="flex space-x-3 sm:space-x-5 h-full min-w-max">
             {DEALS_STAGES.filter(stage => filterStage === 'ALL' || filterStage === stage).map((stage, idx) => (
               <DealColumn
                 key={stage}

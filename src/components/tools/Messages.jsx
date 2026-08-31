@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Users, MessageSquare, Trash2, Reply, X, Check, CheckCheck } from "lucide-react";
+import { Send, Users, MessageSquare, Trash2, Reply, X, Check, CheckCheck, ArrowLeft } from "lucide-react";
 import { triggerBrowserNotification } from "../../App"; 
 import { toast } from "../../utils/toast";
 import { addDocument, updateDocument, deleteDocument, setDocument, COLLECTIONS } from "../../services/firestoreSync";
@@ -229,7 +229,7 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   return (
     <div className="flex h-[calc(100vh-140px)] border border-outline-variant bg-surface-container rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,218,243,0.05)]">
       {/* Sidebar Employees List */}
-      <aside className="w-72 border-r border-outline-variant/50 p-4 bg-surface-container-low/50 flex flex-col">
+      <aside className={`w-full md:w-72 border-r border-outline-variant/50 p-4 bg-surface-container-low/50 ${activeUser ? 'hidden md:flex' : 'flex'} flex-col h-full`}>
         <h3 className="font-bold text-on-surface text-sm mb-4 flex items-center">
           <Users size={16} className="mr-2 text-on-surface-variant" />
           Employees
@@ -283,12 +283,20 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
       </aside>
 
       {/* Chat Conversation */}
-      <section className="flex-1 flex flex-col bg-surface-container h-full justify-between">
+      <section className={`flex-1 ${!activeUser ? 'hidden md:flex' : 'flex'} flex-col bg-surface-container h-full justify-between`}>
         {activeUser ? (
           <>
             {/* Active User Header */}
-            <div className="p-4 border-b border-outline-variant/50 flex items-center justify-between bg-surface-container-low/20 shadow-sm z-10">
-              <div className="flex items-center space-x-3">
+            <div className="p-3.5 sm:p-4 border-b border-outline-variant/50 flex items-center justify-between bg-surface-container-low/20 shadow-sm z-10">
+              <div className="flex items-center space-x-2.5 sm:space-x-3">
+                <button
+                  onClick={() => setActiveUser(null)}
+                  className="md:hidden p-2 bg-surface-container-high text-primary rounded-xl hover:bg-primary/20 transition-all border border-outline-variant/60 active:scale-95 cursor-pointer"
+                  title="Back to Contact List"
+                  aria-label="Back to Contacts"
+                >
+                  <ArrowLeft size={16} />
+                </button>
                 <UserAvatar 
                   user={activeUser} 
                   size="md" 
@@ -296,7 +304,7 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
                   status={presenceState[activeUser.identifier]?.status === "online" ? 'active' : null} 
                 />
                 <div>
-                  <h4 className="font-extrabold text-on-surface text-sm">
+                  <h4 className="font-extrabold text-on-surface text-xs sm:text-sm">
                     {activeUser.name || activeUser.identifier}
                   </h4>
                   <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">

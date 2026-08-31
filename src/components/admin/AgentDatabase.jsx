@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   Search, Shield, User, Mail, Briefcase, Plus, Check, X, Trash2, 
   KeyRound, Clock, Edit2, Save, ChevronRight, Phone, ShieldCheck,
-  UserCheck, AlertCircle, Camera, Sparkles
+  UserCheck, AlertCircle, Camera, Sparkles, ArrowLeft
 } from 'lucide-react';
 import Card from '../common/Card';
 import DeleteModal from '../common/DeleteModal';
@@ -16,6 +16,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
   const [deleteId, setDeleteId] = useState(null);
   
   const [isEditing, setIsEditing] = useState(false);
@@ -288,7 +289,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
       {/* Main Grid */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
         {/* Left column: List */}
-        <div className="w-full lg:w-1/3 flex flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
+        <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
           <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
              <span className="flex items-center gap-2">
                <UserCheck size={14} className="text-primary" />
@@ -315,7 +316,10 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                 return (
                   <div
                     key={u.identifier}
-                    onClick={() => setSelectedAgent(u)}
+                    onClick={() => {
+                      setSelectedAgent(u);
+                      setMobileView('detail');
+                    }}
                     className={`p-3.5 cursor-pointer transition-all flex items-center space-x-3 ${
                       isSelected 
                         ? 'bg-primary/10 border-l-4 border-primary shadow-inner' 
@@ -339,9 +343,16 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
         </div>
 
         {/* Right column: Details Inspector */}
-        <div className="w-full lg:w-2/3 h-full overflow-y-auto custom-scrollbar pr-1">
+        <div className={`w-full lg:w-2/3 ${mobileView === 'list' ? 'hidden lg:block' : 'block'} h-full overflow-y-auto custom-scrollbar pr-1`}>
           {selectedAgent ? (
             <div className="space-y-6">
+              {/* Mobile Back to List Button */}
+              <button 
+                onClick={() => setMobileView('list')}
+                className="lg:hidden flex items-center gap-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3.5 py-2 rounded-xl border border-primary/30 active:scale-95 transition-all w-fit cursor-pointer mb-2"
+              >
+                <ArrowLeft size={14} /> Back to Members Directory
+              </button>
               
               {/* Member Profile Overview */}
               <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">

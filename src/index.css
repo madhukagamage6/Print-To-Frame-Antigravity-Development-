@@ -137,3 +137,31 @@ html, body, #root {
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 218, 243, 0.5); /* Primary color */
 }
+
+/* ── Mobile Touch & Momentum Scrolling ──────────────────────── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area insets for mobile notches and bottom home indicators */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Smooth horizontal snap scrolling for Kanban on mobile */
+.snap-x-mandatory {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.snap-start-card {
+  scroll-snap-align: start;
+}
