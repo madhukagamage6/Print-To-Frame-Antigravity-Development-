@@ -7,6 +7,7 @@ import {
   Layers, CheckCircle2, Shield, AlertCircle, Sliders
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
+import { SYSTEM_ROLES } from '../../constants/roles';
 
 // ── Action Definitions with metadata ──────────────────────────────────────────
 const ACTION_DEFS = [
@@ -67,7 +68,7 @@ const MODULE_CATEGORIES = [
   }
 ];
 
-const ROLES = ['Manager', 'Sales', 'Operations', 'Support', 'Accounts', 'Logistics', 'Partner', 'Customer', 'Business Client'];
+const ROLES = SYSTEM_ROLES.filter(r => r !== 'Admin');
 
 // Detect matching preset
 function getMatchingPreset(perms = {}) {

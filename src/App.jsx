@@ -537,14 +537,63 @@ function App() {
     }
   };
 
-  const approvePending = async (regData) => {
+  const approvePending = async (regData, customRole) => {
     try {
-      await setDoc(doc(db, "users", regData.identifier), { ...regData, isApproved: true });
+      const finalRole = customRole || regData.role || 'Partner';
+      const approvedUser = { 
+        ...regData, 
+        role: finalRole, 
+        isApproved: true,
+        status: 'Active',
+        approvedAt: new Date().toISOString(),
+        approvedBy: currentUser?.identifier || 'Admin',
+      };
+      await setDoc(doc(db, "users", regData.identifier), approvedUser);
       await deleteDoc(doc(db, "pendingUsers", regData.identifier));
-      logActivity(currentUser.identifier, currentUser.name, 'APPROVE', 'Admin', `Approved user access for ${regData.identifier}`);
+
+      // Auto-Sync: If role is Partner, automatically provision in partners collection
+      if (finalRole === 'Partner') {
+        const nextId = partners.length > 0 ? Math.max(...partners.map(p => p.id || 0)) + 1 : 1;
+        const partnerCode = `P-${1000 + nextId}`;
+        const newPartnerRecord = {
+          id: nextId,
+          partnerId: partnerCode,
+          name: regData.name,
+          email: regData.identifier,
+          phone: regData.mobile || regData.contactNumber || '',
+          type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
+          totalSqFt: 0,
+          paid: 0,
+          pending: 0,
+          status: 'Active',
+          createdAt: new Date().toISOString(),
+        };
+        await addDocument(COLLECTIONS.PARTNERS, newPartnerRecord, partnerCode);
+        setPartners(prev => [...prev.filter(p => p.partnerId !== partnerCode), newPartnerRecord]);
+      }
+
+      // Auto-Sync: If role is Business Client, automatically provision in customers collection
+      if (finalRole === 'Business Client') {
+        const newCustomerRecord = {
+          nic: regData.identifier,
+          name: regData.name,
+          businessName: regData.company || regData.name,
+          type: 'Business',
+          phone: regData.mobile || regData.contactNumber || '',
+          email: regData.identifier,
+          status: 'Active',
+          createdAt: new Date().toISOString(),
+        };
+        await addDocument(COLLECTIONS.CUSTOMERS, newCustomerRecord, regData.identifier);
+        setCustomers(prev => [...prev.filter(c => c.nic !== regData.identifier), newCustomerRecord]);
+      }
+
+      logActivity(currentUser.identifier, currentUser.name, 'APPROVE', 'Admin', `Approved user access for ${regData.identifier} as ${finalRole}`);
+      return approvedUser;
     } catch (err) {
       console.error("Error approving user:", err);
-      alert("Error approving user: " + err.message);
+      toast.error("Error approving user: " + err.message);
+      throw err;
     }
   };
 
@@ -554,7 +603,7 @@ function App() {
       logActivity(currentUser.identifier, currentUser.name, 'REJECT', 'Admin', `Rejected user access for ${identifier}`);
     } catch (err) {
       console.error("Error rejecting user:", err);
-      alert("Error rejecting user: " + err.message);
+      toast.error("Error rejecting user: " + err.message);
     }
   };
 
@@ -929,6 +978,10 @@ function App() {
               currentUser={currentUser}
               onApprove={approvePending}
               onReject={rejectPending}
+              partners={partners}
+              setPartners={setPartners}
+              customers={customers}
+              setCustomers={setCustomers}
               dataStore={dataStore}
             />
           )}

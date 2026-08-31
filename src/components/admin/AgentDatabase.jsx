@@ -2,17 +2,35 @@ import React, { useState, useRef } from 'react';
 import { 
   Search, Shield, User, Mail, Briefcase, Plus, Check, X, Trash2, 
   KeyRound, Clock, Edit2, Save, ChevronRight, Phone, ShieldCheck,
-  UserCheck, AlertCircle, Camera, Sparkles, ArrowLeft
+  UserCheck, AlertCircle, Camera, Sparkles, ArrowLeft, Send, Eye,
+  Building, CheckCircle2, Copy
 } from 'lucide-react';
 import Card from '../common/Card';
 import DeleteModal from '../common/DeleteModal';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { toast } from '../../utils/toast';
-import { subscribeToCollection, COLLECTIONS } from '../../services/firestoreSync';
-import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, ImageCropModal } from '../common/ui';
+import { subscribeToCollection, addDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { 
+  PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, 
+  ImageCropModal, EmailTemplateModal 
+} from '../common/ui';
+import { SYSTEM_ROLES, ROLE_METADATA, getRoleCategory } from '../../constants/roles';
 
-export default function AgentDatabase({ users = [], setUsers, pendingUsers = [], setPendingUsers, currentUser, onApprove, onReject }) {
+export default function AgentDatabase({ 
+  users = [], 
+  setUsers, 
+  pendingUsers = [], 
+  setPendingUsers, 
+  currentUser, 
+  onApprove, 
+  onReject,
+  partners = [],
+  setPartners,
+  customers = [],
+  setCustomers,
+  dataStore 
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [selectedAgent, setSelectedAgent] = useState(null);
@@ -28,13 +46,27 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
   const [showCropModal, setShowCropModal] = useState(false);
 
-  // Invite Modal State (Item 18)
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteForm, setInviteForm] = useState({
+  // Direct User Creation Modal State
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({
     name: '',
     identifier: '',
+    password: '',
     contactNumber: '',
-    role: 'Sales'
+    role: 'Sales',
+    company: '',
+    specialty: '',
+  });
+
+  // Review Registration Modal State
+  const [reviewingApplicant, setReviewingApplicant] = useState(null);
+  const [selectedReviewRole, setSelectedReviewRole] = useState('Partner');
+
+  // Email Template Modal State
+  const [emailModalConfig, setEmailModalConfig] = useState({
+    isOpen: false,
+    recipient: null,
+    initialTemplateId: null,
   });
 
   React.useEffect(() => {
@@ -72,30 +104,24 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
     }
   };
 
-  const getRoleCategory = (role) => {
-    const r = role?.toLowerCase() || '';
-    if (r === 'partner') return 'Partners';
-    if (r === 'customer') return 'Customers';
-    return 'Employees';
-  };
-
-  const employeeCount = users.filter(u => getRoleCategory(u.role) === 'Employees').length;
-  const partnerCount = users.filter(u => getRoleCategory(u.role) === 'Partners').length;
-  const customerCount = users.filter(u => getRoleCategory(u.role) === 'Customers').length;
+  const employeeCount = users.filter(u => getRoleCategory(u.role) !== 'Partners' && getRoleCategory(u.role) !== 'Clients').length;
+  const partnerCount = users.filter(u => u.role === 'Partner').length;
+  const clientCount = users.filter(u => u.role === 'Business Client' || u.role === 'Customer').length;
 
   const filteredUsers = users.filter(u => {
     const query = searchQuery.toLowerCase();
     const matchesSearch = (
       u.name?.toLowerCase().includes(query) ||
       u.identifier?.toLowerCase().includes(query) ||
-      u.role?.toLowerCase().includes(query)
+      u.role?.toLowerCase().includes(query) ||
+      u.company?.toLowerCase().includes(query)
     );
 
     if (!matchesSearch) return false;
 
-    if (activeTab === 'employees') return getRoleCategory(u.role) === 'Employees';
-    if (activeTab === 'partners') return getRoleCategory(u.role) === 'Partners';
-    if (activeTab === 'customers') return getRoleCategory(u.role) === 'Customers';
+    if (activeTab === 'employees') return getRoleCategory(u.role) !== 'Partners' && getRoleCategory(u.role) !== 'Clients';
+    if (activeTab === 'partners') return u.role === 'Partner';
+    if (activeTab === 'clients') return u.role === 'Business Client' || u.role === 'Customer';
     return true;
   });
 
@@ -108,7 +134,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
           setSelectedAgent(null);
         }
         setDeleteId(null);
-        toast.success("User access removed successfully");
+        toast.success("User access revoked successfully");
       } catch (err) {
         toast.error("Error removing user: " + err.message);
       }
@@ -140,33 +166,99 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
     }
   };
 
-  const handleInviteUser = async (e) => {
+  // Direct User Creation Handler
+  const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!inviteForm.name || !inviteForm.identifier) {
+    if (!createUserForm.name || !createUserForm.identifier) {
       toast.error("Please provide both name and email/identifier.");
       return;
     }
     try {
-      const emailKey = inviteForm.identifier.trim().toLowerCase();
+      const emailKey = createUserForm.identifier.trim().toLowerCase();
+      const role = createUserForm.role || 'Sales';
+      const tempPass = createUserForm.password?.trim() || `PTF@${Math.floor(1000 + Math.random() * 9000)}`;
+
       const newUser = {
-        name: inviteForm.name.trim(),
+        name: createUserForm.name.trim(),
         identifier: emailKey,
-        contactNumber: inviteForm.contactNumber.trim() || '',
-        role: inviteForm.role || 'Sales',
+        contactNumber: createUserForm.contactNumber?.trim() || '',
+        role,
+        company: createUserForm.company?.trim() || '',
+        specialty: createUserForm.specialty?.trim() || '',
         status: 'Active',
-        invitedAt: new Date().toISOString(),
-        invitedBy: currentUser?.email || 'Admin',
+        isApproved: true,
+        tempPassword: tempPass,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser?.email || 'Admin',
       };
-      await updateDoc(doc(db, "users", emailKey), newUser).catch(async () => {
-        const { setDoc } = await import('firebase/firestore');
-        await setDoc(doc(db, "users", emailKey), newUser);
-      });
+
+      await setDoc(doc(db, "users", emailKey), newUser);
       setUsers(prev => [...prev.filter(u => u.identifier !== emailKey), newUser]);
-      setShowInviteModal(false);
-      setInviteForm({ name: '', identifier: '', contactNumber: '', role: 'Sales' });
-      toast.success(`Invited ${newUser.name} with ${newUser.role} role`);
+
+      // Auto-Sync: Partner domain creation
+      let generatedPartnerId = null;
+      if (role === 'Partner' && setPartners) {
+        const nextId = (partners?.length || 0) > 0 ? Math.max(...partners.map(p => p.id || 0)) + 1 : 1;
+        generatedPartnerId = `P-${1000 + nextId}`;
+        const newPartnerRecord = {
+          id: nextId,
+          partnerId: generatedPartnerId,
+          name: newUser.name,
+          email: emailKey,
+          phone: newUser.contactNumber,
+          type: newUser.specialty ? 'Custom Workshop / Artisan' : 'Agency',
+          totalSqFt: 0,
+          paid: 0,
+          pending: 0,
+          status: 'Active',
+          createdAt: new Date().toISOString(),
+        };
+        await addDocument(COLLECTIONS.PARTNERS, newPartnerRecord, generatedPartnerId);
+        setPartners(prev => [...prev.filter(p => p.partnerId !== generatedPartnerId), newPartnerRecord]);
+      }
+
+      // Auto-Sync: Customer domain creation
+      if (role === 'Business Client' && setCustomers) {
+        const newCustomerRecord = {
+          nic: emailKey,
+          name: newUser.name,
+          businessName: newUser.company || newUser.name,
+          type: 'Business',
+          phone: newUser.contactNumber,
+          email: emailKey,
+          status: 'Active',
+          createdAt: new Date().toISOString(),
+        };
+        await addDocument(COLLECTIONS.CUSTOMERS, newCustomerRecord, emailKey);
+        setCustomers(prev => [...prev.filter(c => c.nic !== emailKey), newCustomerRecord]);
+      }
+
+      setShowCreateUserModal(false);
+      setCreateUserForm({
+        name: '',
+        identifier: '',
+        password: '',
+        contactNumber: '',
+        role: 'Sales',
+        company: '',
+        specialty: '',
+      });
+
+      toast.success(`User ${newUser.name} enrolled with role: ${newUser.role}`);
+
+      // Open Email Template Composer immediately with credentials
+      setEmailModalConfig({
+        isOpen: true,
+        recipient: {
+          ...newUser,
+          partnerId: generatedPartnerId,
+          tempPassword: tempPass,
+        },
+        initialTemplateId: role === 'Partner' ? 'partner_approval' : role === 'Business Client' ? 'client_approval' : 'employee_invite',
+      });
+
     } catch (err) {
-      toast.error("Failed to invite member: " + err.message);
+      toast.error("Failed to enroll user: " + err.message);
     }
   };
 
@@ -175,7 +267,8 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
     try {
       await updateDoc(doc(db, "users", selectedAgent.identifier), {
         name: editForm.name,
-        contactNumber: editForm.contactNumber || ""
+        contactNumber: editForm.contactNumber || "",
+        company: editForm.company || "",
       });
       setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, ...editForm } : u));
       setSelectedAgent(prev => ({ ...prev, ...editForm }));
@@ -190,15 +283,45 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
     toast.info(`Password reset email instructions sent to ${selectedAgent.identifier}`);
   };
 
-  const handleApprove = async (regData) => {
-    setPendingUsers(pendingUsers.filter(u => u.identifier !== regData.identifier));
-    if (onApprove) await onApprove(regData);
-    toast.success(`Access approved for ${regData.name}`);
+  // Review & Approve Request Flow
+  const handleOpenReview = (applicant) => {
+    setReviewingApplicant(applicant);
+    setSelectedReviewRole(applicant.role || 'Partner');
   };
 
-  const handleReject = async (identifier) => {
-    setPendingUsers(pendingUsers.filter(u => u.identifier !== identifier));
+  const handleExecuteApproval = async () => {
+    if (!reviewingApplicant) return;
+    try {
+      const applicantCopy = { ...reviewingApplicant };
+      setPendingUsers(prev => prev.filter(u => u.identifier !== applicantCopy.identifier));
+      
+      let approvedUser = null;
+      if (onApprove) {
+        approvedUser = await onApprove(applicantCopy, selectedReviewRole);
+      }
+      
+      setReviewingApplicant(null);
+      toast.success(`Access approved for ${applicantCopy.name} as ${selectedReviewRole}`);
+
+      // Launch Email Template Composer for the newly approved applicant
+      setEmailModalConfig({
+        isOpen: true,
+        recipient: {
+          ...applicantCopy,
+          role: selectedReviewRole,
+          tempPassword: applicantCopy.tempPassword || '[Generated upon registration]',
+        },
+        initialTemplateId: selectedReviewRole === 'Partner' ? 'partner_approval' : 'client_approval',
+      });
+    } catch (err) {
+      toast.error("Approval failed: " + err.message);
+    }
+  };
+
+  const handleExecuteRejection = async (identifier) => {
+    setPendingUsers(prev => prev.filter(u => u.identifier !== identifier));
     if (onReject) await onReject(identifier);
+    if (reviewingApplicant?.identifier === identifier) setReviewingApplicant(null);
     toast.info("Registration request dismissed");
   };
 
@@ -206,22 +329,23 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
       {/* Standardized Header */}
       <PageHeader
-        title="User & Identity Directory"
-        subtitle="Manage authenticated member access levels, department authorizations, and pending identity registrations."
+        title="User & Access Directory"
+        subtitle="Manage authenticated identity access levels, dynamic RBAC roles, and pending registration requests."
         metrics={[
           { label: "Total Members", value: users.length, color: "cyan" },
           { label: "Internal Team", value: employeeCount, color: "emerald" },
-          { label: "Partner Accounts", value: partnerCount, color: "amber" },
+          { label: "Art Partners", value: partnerCount, color: "amber" },
+          { label: "Client Accounts", value: clientCount, color: "purple" },
           { label: "Pending Approvals", value: pendingUsers.length, color: pendingUsers.length > 0 ? "warning" : "neutral" }
         ]}
         actions={
           isAdmin && (
             <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0"
+              onClick={() => setShowCreateUserModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0 cursor-pointer"
             >
               <Plus size={16} />
-              <span>Invite Member</span>
+              <span>Enroll New Member</span>
             </button>
           )
         }
@@ -231,14 +355,14 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
       <FilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        placeholder="Search users by name, email, or role..."
+        placeholder="Search users by name, email, company, or role..."
         activeFilter={activeTab}
         onFilterChange={setActiveTab}
         filterOptions={[
           { id: 'all', label: 'All Members', count: users.length },
-          { id: 'employees', label: 'Internal Employees', count: employeeCount },
-          { id: 'partners', label: 'Art Partners', count: partnerCount },
-          { id: 'customers', label: 'Client Accounts', count: customerCount }
+          { id: 'employees', label: 'Internal Team', count: employeeCount },
+          { id: 'partners', label: 'Art & Framing Partners', count: partnerCount },
+          { id: 'clients', label: 'Corporate & Retail Clients', count: clientCount }
         ]}
         totalCount={users.length}
         filteredCount={filteredUsers.length}
@@ -246,36 +370,68 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
 
       {/* Pending Registrations Callout (Admin Only) */}
       {isAdmin && pendingUsers.length > 0 && (
-        <div className="mb-6 p-5 bg-surface-container/80 border border-primary/30 rounded-2xl shadow-[0_4px_20px_rgba(0,218,243,0.1)] flex-shrink-0">
+        <div className="mb-6 p-5 bg-surface-container/90 border-2 border-primary/40 rounded-3xl shadow-[0_8px_30px_rgba(0,218,243,0.12)] flex-shrink-0 animate-in fade-in duration-200">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center">
-              <Shield size={16} className="mr-2 text-primary" />
-              Pending Access Approvals
-            </h3>
-            <span className="text-[10px] bg-primary/20 text-primary px-2.5 py-0.5 rounded-full font-bold">
-              {pendingUsers.length} Requests Awaiting
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-primary/20 text-primary rounded-lg">
+                <Shield size={16} />
+              </div>
+              <h3 className="text-xs font-black text-on-surface uppercase tracking-wider">
+                Registration Applications Awaiting Review
+              </h3>
+            </div>
+            <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full font-black uppercase tracking-wider">
+              {pendingUsers.length} Requests Pending
             </span>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendingUsers.map(user => (
-              <div key={user.identifier} className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60 flex items-center justify-between">
+              <div 
+                key={user.identifier} 
+                className="p-4 bg-surface-container-low/90 rounded-2xl border border-outline-variant/60 hover:border-primary/50 transition-all flex items-center justify-between shadow-sm"
+              >
                 <div className="min-w-0 pr-3">
-                  <p className="text-xs font-bold text-on-surface truncate">{user.name}</p>
-                  <p className="text-[10px] text-on-surface-variant font-mono truncate">{user.identifier}</p>
-                  <p className="text-[9px] font-bold text-primary uppercase mt-1 tracking-wider">{user.role}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-extrabold text-on-surface truncate">{user.name}</p>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
+                      user.role === 'Partner' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-on-surface-variant font-mono truncate mt-0.5">{user.identifier}</p>
+                  {user.company && (
+                    <p className="text-[10px] text-primary font-semibold truncate mt-0.5">🏢 {user.company}</p>
+                  )}
+                  {user.specialty && (
+                    <p className="text-[10px] text-cyan-400 font-semibold truncate mt-0.5">✨ {user.specialty}</p>
+                  )}
                 </div>
-                <div className="flex space-x-1.5 flex-shrink-0">
+
+                <div className="flex items-center space-x-1.5 flex-shrink-0">
                   <button 
-                    onClick={() => handleApprove(user)} 
-                    className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
-                    title="Approve Access"
+                    onClick={() => handleOpenReview(user)} 
+                    className="p-2 bg-primary/15 text-primary border border-primary/30 rounded-xl hover:bg-primary/25 transition-colors cursor-pointer"
+                    title="Review Full Dossier"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setReviewingApplicant(user);
+                      setSelectedReviewRole(user.role || 'Partner');
+                      handleExecuteApproval();
+                    }} 
+                    className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
+                    title="Quick Approve"
                   >
                     <Check size={14} />
                   </button>
                   <button 
-                    onClick={() => handleReject(user.identifier)} 
-                    className="p-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-lg transition-colors"
-                    title="Reject Request"
+                    onClick={() => handleExecuteRejection(user.identifier)} 
+                    className="p-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-colors cursor-pointer"
+                    title="Decline"
                   >
                     <X size={14} />
                   </button>
@@ -286,17 +442,17 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
         </div>
       )}
 
-      {/* Main Grid */}
+      {/* Main Master-Detail Grid */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
-        {/* Left column: List */}
-        <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
+        {/* Left column: User Registry */}
+        <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
           <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
              <span className="flex items-center gap-2">
                <UserCheck size={14} className="text-primary" />
-               Registered Members ({filteredUsers.length})
+               Enrolled Members ({filteredUsers.length})
              </span>
              <span className="text-[10px] text-on-surface-variant/70 lowercase font-medium">
-               click to inspect
+               click to inspect & assign role
              </span>
           </div>
 
@@ -310,31 +466,43 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
             ) : (
               filteredUsers.map(u => {
                 const isSelected = selectedAgent?.identifier === u.identifier;
-                const isAdminRole = u.role === 'Admin';
-                const isPartnerRole = u.role === 'Partner';
+                const roleMeta = ROLE_METADATA[u.role] || { badge: 'bg-surface-container-high text-on-surface-variant' };
 
                 return (
                   <div
                     key={u.identifier}
                     onClick={() => {
                       setSelectedAgent(u);
+                      setIsEditing(false);
                       setMobileView('detail');
                     }}
-                    className={`p-3.5 cursor-pointer transition-all flex items-center space-x-3 ${
-                      isSelected 
-                        ? 'bg-primary/10 border-l-4 border-primary shadow-inner' 
-                        : 'hover:bg-surface-container-high/40 border-l-4 border-transparent'
+                    className={`p-4 transition-all cursor-pointer flex items-center space-x-3.5 ${
+                      isSelected
+                        ? 'bg-primary/10 border-l-4 border-primary text-on-surface shadow-sm'
+                        : 'hover:bg-surface-container-high/40 text-on-surface-variant'
                     }`}
                   >
-                    <UserAvatar user={u} size="md" showStatus />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex justify-between items-center mb-0.5">
-                        <p className="text-xs font-bold text-on-surface truncate">{u.name}</p>
-                        <StatusBadge status={u.role || 'User'} size="xs" />
+                    <UserAvatar
+                      photoURL={u.photoURL}
+                      name={u.name}
+                      role={u.role}
+                      size="md"
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-xs font-black text-on-surface truncate">{u.name}</h4>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${roleMeta.badge}`}>
+                          {u.role}
+                        </span>
                       </div>
-                      <p className="text-[10px] text-on-surface-variant font-mono truncate">{u.identifier}</p>
+                      <p className="text-[11px] text-on-surface-variant/80 font-mono truncate">{u.identifier}</p>
+                      {u.company && (
+                        <p className="text-[10px] text-primary/90 font-medium truncate mt-0.5">🏢 {u.company}</p>
+                      )}
                     </div>
-                    <ChevronRight size={14} className={`text-on-surface-variant/40 transition-transform ${isSelected ? 'text-primary translate-x-0.5' : ''}`} />
+
+                    <ChevronRight size={14} className="text-outline/40 flex-shrink-0" />
                   </div>
                 );
               })
@@ -342,33 +510,41 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
           </div>
         </div>
 
-        {/* Right column: Details Inspector */}
-        <div className={`w-full lg:w-2/3 ${mobileView === 'list' ? 'hidden lg:block' : 'block'} h-full overflow-y-auto custom-scrollbar pr-1`}>
+        {/* Right column: Selected Member Dossier Inspector */}
+        <div className={`w-full lg:w-2/3 ${mobileView === 'list' ? 'hidden lg:flex' : 'flex'} flex-col overflow-y-auto custom-scrollbar h-full`}>
           {selectedAgent ? (
             <div className="space-y-6">
-              {/* Mobile Back to List Button */}
-              <button 
-                onClick={() => setMobileView('list')}
-                className="lg:hidden flex items-center gap-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3.5 py-2 rounded-xl border border-primary/30 active:scale-95 transition-all w-fit cursor-pointer mb-2"
-              >
-                <ArrowLeft size={14} /> Back to Members Directory
-              </button>
-              
-              {/* Member Profile Overview */}
-              <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
-                  <div className="flex items-start space-x-5">
+              {/* Mobile Back Button */}
+              <div className="lg:hidden">
+                <button
+                  onClick={() => setMobileView('list')}
+                  className="flex items-center gap-2 text-xs font-bold text-primary bg-surface-container px-3 py-2 rounded-xl border border-outline-variant/60 hover:bg-surface-container-high transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to Members Directory</span>
+                </button>
+              </div>
+
+              {/* Master Member Profile Card */}
+              <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center space-x-4">
                     <div className="relative group">
-                      <UserAvatar user={selectedAgent} size="xl" showStatus className="shadow-md" />
+                      <UserAvatar
+                        photoURL={selectedAgent.photoURL}
+                        name={selectedAgent.name}
+                        role={selectedAgent.role}
+                        size="xl"
+                      />
                       {isAdmin && (
                         <>
                           <button
-                            type="button"
                             onClick={() => photoInputRef.current?.click()}
-                            className="absolute -bottom-1 -right-1 p-2 bg-primary text-on-primary rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(0,218,243,0.4)] active:scale-95 cursor-pointer"
-                            title="Update Profile Photo"
+                            className="absolute inset-0 bg-black/60 rounded-2xl flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Upload & Crop Photo"
                           >
-                            <Camera size={14} />
+                            <Camera size={18} />
+                            <span className="text-[8px] font-bold uppercase mt-1">Change</span>
                           </button>
                           <input
                             ref={photoInputRef}
@@ -381,52 +557,66 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0">
                       {isEditing ? (
-                        <div className="space-y-3 max-w-sm">
-                          <div>
-                            <label className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest block mb-1">Full Name</label>
-                            <input
-                              type="text"
-                              value={editForm.name || ""}
-                              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                              className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest block mb-1">Contact Phone</label>
-                            <input
-                              type="text"
-                              value={editForm.contactNumber || ""}
-                              onChange={(e) => setEditForm({ ...editForm, contactNumber: e.target.value })}
-                              placeholder="+94 71 234 5678"
-                              className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
-                            />
-                          </div>
+                        <div className="space-y-2 mb-1">
+                          <input
+                            type="text"
+                            value={editForm.name || ""}
+                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                            className="bg-surface-container-low border border-outline-variant rounded-xl px-3 py-1.5 text-sm font-bold text-on-surface outline-none focus:border-primary w-full"
+                            placeholder="Full Name"
+                          />
+                          <input
+                            type="text"
+                            value={editForm.contactNumber || ""}
+                            onChange={(e) => setEditForm({ ...editForm, contactNumber: e.target.value })}
+                            className="bg-surface-container-low border border-outline-variant rounded-xl px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary w-full"
+                            placeholder="Contact Number (+94 ...)"
+                          />
                         </div>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2.5 flex-wrap mb-1">
-                            <h2 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
-                              {selectedAgent.name}
-                            </h2>
-                            <StatusBadge status={selectedAgent.role || 'User'} size="xs" />
+                          <h2 className="text-lg sm:text-xl font-black text-on-surface tracking-tight truncate">
+                            {selectedAgent.name}
+                          </h2>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border ${
+                              ROLE_METADATA[selectedAgent.role]?.badge || 'bg-surface-container-high text-on-surface-variant'
+                            }`}>
+                              {selectedAgent.role}
+                            </span>
+                            <span className="text-[10px] text-on-surface-variant font-mono">
+                              Dept: {getRoleCategory(selectedAgent.role)}
+                            </span>
                           </div>
-                          <p className="text-xs font-mono font-bold text-on-surface-variant mb-3">
-                            ID: {selectedAgent.identifier?.split('@')[0]?.toUpperCase()}
-                          </p>
                         </>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2 self-start sm:self-auto">
+                  {/* Inspector Action Buttons */}
+                  <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap">
+                    {/* Compose Email / Credentials Button */}
+                    <button
+                      onClick={() => setEmailModalConfig({
+                        isOpen: true,
+                        recipient: selectedAgent,
+                        initialTemplateId: selectedAgent.role === 'Partner' ? 'partner_approval' : selectedAgent.role === 'Business Client' ? 'client_approval' : 'employee_invite',
+                      })}
+                      className="px-3 py-2 bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      title="Send Formatted Email Notification"
+                    >
+                      <Mail size={14} />
+                      <span>Email Templates</span>
+                    </button>
+
                     {isAdmin && (
                       <>
                         {isEditing ? (
                           <button
                             onClick={handleSaveDetails}
-                            className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                            className="p-2.5 bg-primary text-on-primary rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(0,218,243,0.3)] cursor-pointer"
                             title="Save Changes"
                           >
                             <Save size={16} />
@@ -434,10 +624,14 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                         ) : (
                           <button
                             onClick={() => {
-                              setEditForm({ name: selectedAgent.name, contactNumber: selectedAgent.contactNumber || "" });
+                              setEditForm({ 
+                                name: selectedAgent.name, 
+                                contactNumber: selectedAgent.contactNumber || "",
+                                company: selectedAgent.company || "" 
+                              });
                               setIsEditing(true);
                             }}
-                            className="p-2.5 bg-surface-container-high text-on-surface hover:bg-surface-variant hover:text-primary rounded-xl transition-all border border-outline-variant/60"
+                            className="p-2.5 bg-surface-container-high text-on-surface hover:bg-surface-variant hover:text-primary rounded-xl transition-all border border-outline-variant/60 cursor-pointer"
                             title="Edit Details"
                           >
                             <Edit2 size={16} />
@@ -446,7 +640,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                         {currentUser?.identifier !== selectedAgent.identifier && (
                           <button
                             onClick={() => setDeleteId(selectedAgent.identifier)}
-                            className="p-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-500/20"
+                            className="p-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-500/20 cursor-pointer"
                             title="Revoke User Access"
                           >
                             <Trash2 size={16} />
@@ -454,16 +648,10 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                         )}
                       </>
                     )}
-                    {selectedAgent.isApproved && !isEditing && (
-                      <div className="bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center space-x-1.5">
-                        <ShieldCheck size={14} className="text-emerald-400" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Verified</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                {/* Info Attributes Grid */}
+                {/* Attributes Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-outline-variant/60">
                   <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center space-x-3">
                     <Mail size={16} className="text-primary flex-shrink-0" />
@@ -477,40 +665,23 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                     <div className="flex items-center space-x-3 min-w-0">
                       <Briefcase size={16} className="text-cyan-400 flex-shrink-0" />
                       <div>
-                        <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">System Role</p>
+                        <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Dynamic Access Role</p>
                         {isAdmin ? (
                           <select 
                             value={selectedAgent.role}
                             onChange={(e) => handleRoleChange(e.target.value)}
-                            className="bg-surface-container border border-outline-variant rounded-lg px-2 py-1 text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer mt-0.5"
+                            className="bg-surface-container border border-outline-variant rounded-lg px-2.5 py-1 text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer mt-0.5"
                           >
-                            <option value="Admin">Admin</option>
-                            <option value="Sales">Sales</option>
-                            <option value="Operations">Operations</option>
-                            <option value="Customer">Customer</option>
-                            <option value="Partner">Partner</option>
+                            {SYSTEM_ROLES.map(roleName => (
+                              <option key={roleName} value={roleName}>
+                                {roleName} ({ROLE_METADATA[roleName]?.label || roleName})
+                              </option>
+                            ))}
                           </select>
                         ) : (
                           <p className="text-xs font-bold text-on-surface mt-0.5">{selectedAgent.role}</p>
                         )}
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center space-x-3">
-                    <KeyRound size={16} className="text-amber-400 flex-shrink-0" />
-                    <div>
-                      <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Credentials</p>
-                      {isAdmin ? (
-                        <button
-                          onClick={handleResetPassword}
-                          className="text-xs font-bold text-primary hover:underline transition-colors mt-0.5 block"
-                        >
-                          Send Password Reset
-                        </button>
-                      ) : (
-                        <p className="text-xs font-bold text-emerald-400 mt-0.5">Active & Secured</p>
-                      )}
                     </div>
                   </div>
 
@@ -527,7 +698,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                     {isAdmin && (
                       <button
                         onClick={handleToggleStatus}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
                           selectedAgent.status === 'Deactivated'
                             ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
                             : 'text-rose-400 bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/20'
@@ -550,7 +721,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                 </div>
               </div>
               
-              {/* Activity Logs */}
+              {/* Activity Audit Stream */}
               <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-outline-variant/40">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface flex items-center">
@@ -591,7 +762,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
               <User size={56} className="mb-3 opacity-20 text-on-surface" />
               <h3 className="font-bold text-base text-on-surface">No Member Selected</h3>
               <p className="text-xs max-w-sm text-on-surface-variant mt-1.5 leading-relaxed">
-                Select an employee, art partner, or client from the registry to inspect identity credentials, adjust dynamic access roles, or review audit trails.
+                Select an employee, art partner, or corporate client from the registry to inspect identity credentials, adjust dynamic access roles, or dispatch email templates.
               </p>
             </div>
           )}
@@ -606,108 +777,262 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
         message="Are you sure you want to revoke this user's account? They will be immediately disconnected from the ERP workspace."
       />
 
-      {/* Invite Member Modal (Item 18) */}
-      {showInviteModal && (
+      {/* Direct User Creation Modal */}
+      {showCreateUserModal && (
         <ModalWrapper
-          isOpen={showInviteModal}
-          onClose={() => setShowInviteModal(false)}
-          maxWidth="max-w-md"
-          height="h-auto max-h-[85vh]"
-          ariaLabel="Invite Team Member"
+          isOpen={showCreateUserModal}
+          onClose={() => setShowCreateUserModal(false)}
+          maxWidth="max-w-xl"
+          height="h-auto max-h-[90vh]"
+          ariaLabel="Enroll New Member"
         >
           <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center flex-shrink-0">
             <div>
-              <h3 className="text-lg sm:text-xl font-bold text-on-surface">
-                Invite Team Member
+              <h3 className="text-lg sm:text-xl font-black text-on-surface">
+                Enroll Member & Provision Access
               </h3>
               <p className="text-[10px] uppercase font-bold text-primary tracking-widest mt-0.5">
-                Access Control & Identity Enrollment
+                Dynamic Role-Based Access Control
               </p>
             </div>
             <button 
-              onClick={() => setShowInviteModal(false)} 
-              className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors"
+              onClick={() => setShowCreateUserModal(false)} 
+              className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors cursor-pointer"
             >
               <X size={18} />
             </button>
           </div>
 
-          <form onSubmit={handleInviteUser} className="p-6 overflow-y-auto space-y-4">
+          <form onSubmit={handleCreateUser} className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
             <div>
               <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
                 Full Name *
               </label>
               <input 
                 type="text" 
-                value={inviteForm.name} 
-                onChange={e => setInviteForm({...inviteForm, name: e.target.value})} 
+                value={createUserForm.name} 
+                onChange={e => setCreateUserForm({...createUserForm, name: e.target.value})} 
                 className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
                 placeholder="e.g. Kasun Perera"
                 required 
               />
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Email / Workspace ID *
-              </label>
-              <input 
-                type="email" 
-                value={inviteForm.identifier} 
-                onChange={e => setInviteForm({...inviteForm, identifier: e.target.value})} 
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-mono" 
-                placeholder="kasun@print2frame.xyz"
-                required 
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                  Email / Workspace ID *
+                </label>
+                <input 
+                  type="email" 
+                  value={createUserForm.identifier} 
+                  onChange={e => setCreateUserForm({...createUserForm, identifier: e.target.value})} 
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-mono" 
+                  placeholder="kasun@print2frame.xyz"
+                  required 
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                  Initial Password
+                </label>
+                <input 
+                  type="text" 
+                  value={createUserForm.password} 
+                  onChange={e => setCreateUserForm({...createUserForm, password: e.target.value})} 
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-mono" 
+                  placeholder="Auto-generated if blank"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Contact Number
-              </label>
-              <input 
-                type="text" 
-                value={inviteForm.contactNumber} 
-                onChange={e => setInviteForm({...inviteForm, contactNumber: e.target.value})} 
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
-                placeholder="+94 7X XXX XXXX"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                  Contact Number
+                </label>
+                <input 
+                  type="text" 
+                  value={createUserForm.contactNumber} 
+                  onChange={e => setCreateUserForm({...createUserForm, contactNumber: e.target.value})} 
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
+                  placeholder="+94 7X XXX XXXX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                  Assigned Role *
+                </label>
+                <select
+                  value={createUserForm.role}
+                  onChange={e => setCreateUserForm({...createUserForm, role: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-bold cursor-pointer"
+                >
+                  {SYSTEM_ROLES.map(role => (
+                    <option key={role} value={role}>
+                      {role} — {ROLE_METADATA[role]?.desc || role}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Assigned Role *
-              </label>
-              <select
-                value={inviteForm.role}
-                onChange={e => setInviteForm({...inviteForm, role: e.target.value})}
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-bold"
-              >
-                <option value="Admin">Admin</option>
-                <option value="Sales">Sales</option>
-                <option value="Operations">Operations</option>
-                <option value="Partner">Partner</option>
-                <option value="Customer">Customer</option>
-              </select>
-            </div>
+            {createUserForm.role === 'Business Client' && (
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                  Company / Enterprise Name
+                </label>
+                <input 
+                  type="text" 
+                  value={createUserForm.company} 
+                  onChange={e => setCreateUserForm({...createUserForm, company: e.target.value})} 
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
+                  placeholder="e.g. Apex Architects Pvt Ltd"
+                />
+              </div>
+            )}
 
-            <div className="pt-3 border-t border-outline-variant flex justify-end space-x-2">
+            {createUserForm.role === 'Partner' && (
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                  Workshop Specialization / Focus
+                </label>
+                <input 
+                  type="text" 
+                  value={createUserForm.specialty} 
+                  onChange={e => setCreateUserForm({...createUserForm, specialty: e.target.value})} 
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
+                  placeholder="e.g. Canvas Stretcher Frames, Floating Acrylics"
+                />
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-outline-variant flex justify-end space-x-3">
               <button 
                 type="button" 
-                onClick={() => setShowInviteModal(false)}
-                className="px-4 py-2 text-xs font-bold text-on-surface-variant hover:text-on-surface"
+                onClick={() => setShowCreateUserModal(false)}
+                className="px-4 py-2.5 text-xs font-bold text-on-surface-variant hover:text-on-surface cursor-pointer"
               >
                 Cancel
               </button>
               <button 
                 type="submit" 
-                className="px-5 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(0,218,243,0.2)]"
+                className="px-6 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.3)] active:scale-95 cursor-pointer"
               >
-                Send Invitation
+                Enroll User & Prepare Welcome Email
               </button>
             </div>
           </form>
         </ModalWrapper>
+      )}
+
+      {/* Review Registration Request Modal */}
+      {reviewingApplicant && (
+        <ModalWrapper
+          isOpen={!!reviewingApplicant}
+          onClose={() => setReviewingApplicant(null)}
+          maxWidth="max-w-xl"
+          height="h-auto max-h-[90vh]"
+          ariaLabel="Review Registration Request"
+        >
+          <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center flex-shrink-0">
+            <div>
+              <h3 className="text-lg sm:text-xl font-black text-on-surface">
+                Review Registration Dossier
+              </h3>
+              <p className="text-[10px] uppercase font-bold text-primary tracking-widest mt-0.5">
+                Applicant ID: {reviewingApplicant.identifier}
+              </p>
+            </div>
+            <button 
+              onClick={() => setReviewingApplicant(null)} 
+              className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar">
+            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Applicant Name:</span>
+                <span className="text-sm font-extrabold text-on-surface">{reviewingApplicant.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Email Account:</span>
+                <span className="text-xs font-mono font-bold text-primary">{reviewingApplicant.identifier}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Mobile Number:</span>
+                <span className="text-xs font-bold text-on-surface">{reviewingApplicant.mobile || reviewingApplicant.contactNumber || 'Not provided'}</span>
+              </div>
+              {reviewingApplicant.company && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Company / Entity:</span>
+                  <span className="text-xs font-bold text-on-surface">{reviewingApplicant.company}</span>
+                </div>
+              )}
+              {reviewingApplicant.specialty && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Specialization:</span>
+                  <span className="text-xs font-bold text-cyan-400">{reviewingApplicant.specialty}</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
+                Assign / Confirm Access Role *
+              </label>
+              <select
+                value={selectedReviewRole}
+                onChange={(e) => setSelectedReviewRole(e.target.value)}
+                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+              >
+                {SYSTEM_ROLES.map(r => (
+                  <option key={r} value={r}>
+                    {r} — {ROLE_METADATA[r]?.desc || r}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed">
+                Approving this request will immediately activate workspace privileges, provision a linked database entry if applicable, and generate a pre-filled welcome email draft.
+              </p>
+            </div>
+
+            <div className="pt-4 border-t border-outline-variant flex flex-col sm:flex-row justify-between items-center gap-3">
+              <button 
+                type="button" 
+                onClick={() => handleExecuteRejection(reviewingApplicant.identifier)}
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-rose-400 bg-rose-500/10 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all cursor-pointer"
+              >
+                Decline Request
+              </button>
+
+              <button 
+                type="button" 
+                onClick={handleExecuteApproval}
+                className="w-full sm:w-auto px-6 py-2.5 bg-emerald-500 text-white font-bold text-xs rounded-xl hover:bg-emerald-600 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Check size={16} />
+                <span>Approve & Open Email Draft</span>
+              </button>
+            </div>
+          </div>
+        </ModalWrapper>
+      )}
+
+      {/* Dynamic Email Template Dispatcher Modal */}
+      {emailModalConfig.isOpen && (
+        <EmailTemplateModal
+          isOpen={emailModalConfig.isOpen}
+          onClose={() => setEmailModalConfig({ isOpen: false, recipient: null, initialTemplateId: null })}
+          recipient={emailModalConfig.recipient}
+          initialTemplateId={emailModalConfig.initialTemplateId}
+          currentUser={currentUser}
+        />
       )}
 
       {/* Image Crop & Adjuster Modal */}
@@ -720,4 +1045,3 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
     </div>
   );
 }
-

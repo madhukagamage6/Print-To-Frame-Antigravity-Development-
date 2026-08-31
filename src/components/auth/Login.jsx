@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { CircleAlert, CircleCheckBig, User, Briefcase, Mail, Lock, Phone } from 'lucide-react';
+import { CircleAlert, CircleCheckBig, User, Briefcase, Mail, Lock, Phone, Building, Sparkles } from 'lucide-react';
 import { googleSignIn } from '../../services/firebase';
+import { PUBLIC_REGISTRATION_ROLES } from '../../constants/roles';
 
 export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
   const [isLoginView, setIsLoginView] = useState(true);
@@ -12,20 +13,12 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
     password: "",
     name: "",
     mobile: "",
-    role: "Customer",
+    company: "",
+    specialty: "",
+    role: "Partner",
   });
 
-  const roles = [
-    "Manager",
-    "Sales",
-    "Operations",
-    "Partner",
-    "Customer",
-    "Support",
-    "Accounts",
-    "Logistics",
-    "Business Client",
-  ];
+  const roles = PUBLIC_REGISTRATION_ROLES;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -135,20 +128,52 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
                 </div>
 
                 <div>
-                  <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">User Role</label>
+                  <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Requested Access Role</label>
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
                     <select
-                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all appearance-none"
+                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
                       value={form.role}
                       onChange={(e) => setForm({ ...form, role: e.target.value })}
                     >
-                      {roles.map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
+                      <option value="Partner">Art & Framing Partner</option>
+                      <option value="Business Client">Corporate Client (B2B)</option>
                     </select>
                   </div>
                 </div>
+
+                {form.role === 'Business Client' && (
+                  <div>
+                    <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Company / Enterprise Name *</label>
+                    <div className="relative">
+                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                      <input
+                        type="text"
+                        placeholder="e.g. Apex Architects Pvt Ltd"
+                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                        value={form.company}
+                        onChange={(e) => setForm({ ...form, company: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {form.role === 'Partner' && (
+                  <div>
+                    <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Specialization / Workshop Focus</label>
+                    <div className="relative">
+                      <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                      <input
+                        type="text"
+                        placeholder="e.g. Canvas Framing, Gold Leafing, Acrylic"
+                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                        value={form.specialty}
+                        onChange={(e) => setForm({ ...form, specialty: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
