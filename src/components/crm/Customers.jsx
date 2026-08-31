@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, User, Building, Phone, Mail, Clock, FileText, Trash2, 
   Sparkles, MessageSquare, Check, X, DollarSign, MapPin, Plus, 
-  ChevronRight, Calendar, ExternalLink, Copy, ShieldCheck, Download, AlertTriangle
+  ChevronRight, Calendar, ExternalLink, Copy, ShieldCheck, Download, AlertTriangle, Camera
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { generateText } from '../../services/gemini';
 import DeleteModal from '../common/DeleteModal';
-import { PageHeader, FilterBar, StatusBadge, ModalWrapper } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, ImageCropModal } from '../common/ui';
 import ActivityTimeline from '../common/ui/ActivityTimeline';
 import { addDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { exportToCsv } from '../../utils/csvExport';
@@ -18,6 +18,11 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const photoInputRef = useRef(null);
+
+  // Image Crop state
+  const [rawImageForCrop, setRawImageForCrop] = useState(null);
+  const [showCropModal, setShowCropModal] = useState(false);
   
   const [newProfile, setNewProfile] = useState({
     nic: '',
@@ -27,6 +32,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     type: 'Individual',
     businessName: '',
     address: '',
+    photoURL: '',
   });
 
   // AI WhatsApp draft state
@@ -34,6 +40,27 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
   const [whatsappDraft, setWhatsappDraft] = useState('');
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [deleteNic, setDeleteNic] = useState(null);
+
+  const handleCustomerPhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setRawImageForCrop(event.target?.result);
+      setShowCropModal(true);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCustomerCropComplete = (croppedBase64) => {
+    setNewProfile(prev => ({ ...prev, photoURL: croppedBase64 }));
+    toast.success('Customer logo / avatar attached!');
+  };
 
   const isAdmin = currentUser?.role === 'Admin';
 
@@ -330,13 +357,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
                         : 'hover:bg-surface-container-high/40 border-l-4 border-transparent'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm border ${
-                      isBiz 
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                        : 'bg-primary/15 text-primary border-primary/30'
-                    }`}>
-                      {customer.name?.charAt(0)?.toUpperCase() || 'C'}
-                    </div>
+                    <UserAvatar user={customer} size="md" />
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
@@ -383,13 +404,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
               <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
                   <div className="flex items-start space-x-5">
-                    <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center font-black text-2xl sm:text-3xl flex-shrink-0 shadow-md border ${
-                      selectedCustomer.type === 'Business' 
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                        : 'bg-primary/15 text-primary border-primary/30'
-                    }`}>
-                      {selectedCustomer.name?.charAt(0)?.toUpperCase() || 'C'}
-                    </div>
+                    <UserAvatar user={selectedCustomer} size="xl" className="shadow-md" />
                     <div>
                       <div className="flex items-center gap-2.5 flex-wrap mb-1">
                         <h2 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
@@ -725,6 +740,44 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
               />
             </div>
 
+            {/* Customer Avatar Upload Section */}
+            <div className="flex items-center gap-4 p-3 bg-surface-container-low rounded-2xl border border-outline-variant/60">
+              <UserAvatar 
+                user={{ name: newProfile.name || newProfile.businessName || 'Client', photoURL: newProfile.photoURL, role: newProfile.type === 'Business' ? 'business client' : 'customer' }} 
+                size="lg" 
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-on-surface">Client Avatar / Business Logo</p>
+                <p className="text-[10px] text-on-surface-variant">Upload and crop a brand logo or personal photo</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="px-3 py-1 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Camera size={12} />
+                    <span>{newProfile.photoURL ? 'Change & Crop' : 'Upload & Crop'}</span>
+                  </button>
+                  {newProfile.photoURL && (
+                    <button
+                      type="button"
+                      onClick={() => setNewProfile(prev => ({ ...prev, photoURL: '' }))}
+                      className="text-[10px] text-rose-400 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCustomerPhotoUpload}
+                  className="hidden"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
@@ -850,6 +903,14 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
         onConfirm={handleDeleteProfile}
         title="Delete Customer Profile?"
         message="Are you sure you want to permanently delete this customer? All historical links and records will be removed from the view."
+      />
+
+      {/* Image Crop & Adjuster Modal */}
+      <ImageCropModal
+        isOpen={showCropModal}
+        imageSrc={rawImageForCrop}
+        onCropComplete={handleCustomerCropComplete}
+        onClose={() => setShowCropModal(false)}
       />
     </div>
   );

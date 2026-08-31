@@ -5,6 +5,7 @@ import { toast } from "../../utils/toast";
 import { addDocument, updateDocument, deleteDocument, setDocument, COLLECTIONS } from "../../services/firestoreSync";
 import { db } from "../../services/firebase";
 import { collection, query, where, orderBy, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { UserAvatar } from "../common/ui";
 
 // Helper to sort and create channel IDs (e.g. user1_user2)
 function getChannelId(id1, id2) {
@@ -252,18 +253,17 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
                     }`}
                   >
                     <div className="flex items-center space-x-3 truncate">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase ${
-                          isSelected ? "bg-surface-container/20 text-on-surface" : "bg-primary/20 text-primary"
-                        }`}
-                      >
-                        {u.name?.charAt(0) || u.identifier.charAt(0)}
-                      </div>
+                      <UserAvatar 
+                        user={u} 
+                        size="sm" 
+                        showStatus 
+                        status={isOnline ? 'active' : null} 
+                      />
                       <div className="truncate text-left">
                         <div className={`text-xs font-bold leading-tight ${isSelected ? "text-on-surface" : "text-on-surface"}`}>
                           {u.name || u.identifier}
                         </div>
-                        <div className={`text-[9px] mt-0.5 ${isSelected ? "text-indigo-200" : "text-on-surface-variant font-semibold"}`}>
+                        <div className={`text-[9px] mt-0.5 ${isSelected ? "text-primary font-bold" : "text-on-surface-variant font-semibold"}`}>
                           {u.role || "Employee"}
                         </div>
                       </div>
@@ -274,12 +274,6 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
                           {unreadCount}
                         </span>
                       )}
-                      <span
-                        className={`inline-block w-2.5 h-2.5 rounded-full border-2 ${
-                          isSelected ? "border-indigo-600" : "border-white"
-                        } ${isOnline ? "bg-secondary text-on-secondary" : "bg-slate-400"}`}
-                        title={isOnline ? "Online" : "Offline"}
-                      />
                     </div>
                   </button>
                 </li>
@@ -295,9 +289,12 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
             {/* Active User Header */}
             <div className="p-4 border-b border-outline-variant/50 flex items-center justify-between bg-surface-container-low/20 shadow-sm z-10">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary">
-                  {activeUser.name?.charAt(0) || activeUser.identifier.charAt(0)}
-                </div>
+                <UserAvatar 
+                  user={activeUser} 
+                  size="md" 
+                  showStatus 
+                  status={presenceState[activeUser.identifier]?.status === "online" ? 'active' : null} 
+                />
                 <div>
                   <h4 className="font-extrabold text-on-surface text-sm">
                     {activeUser.name || activeUser.identifier}

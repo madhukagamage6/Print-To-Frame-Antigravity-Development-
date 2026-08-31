@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Phone, Mail, Building, MapPin, MessageSquare, ExternalLink } from 'lucide-react';
+import UserAvatar from '../UserAvatar';
 
 /**
  * DetailCustomerCard - Reusable customer contact information card across all modules.
@@ -11,6 +12,7 @@ export default function DetailCustomerCard({
   phone,
   email,
   address,
+  photoURL,
   onWhatsApp,
   compact = false
 }) {
@@ -29,9 +31,10 @@ export default function DetailCustomerCard({
     <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 relative group hover:border-primary/40 transition-all">
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-sm border border-primary/20 flex-shrink-0">
-            {customerName ? customerName.charAt(0).toUpperCase() : <User size={16} />}
-          </div>
+          <UserAvatar 
+            user={{ name: customerName, photoURL, company }} 
+            size="md" 
+          />
           <div>
             <h4 className="text-sm font-bold text-on-surface leading-tight">
               {customerName}

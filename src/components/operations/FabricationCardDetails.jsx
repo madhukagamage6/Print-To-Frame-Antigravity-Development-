@@ -404,6 +404,7 @@ export default function FabricationCardDetails({
               customerName={clientName}
               phone={clientPhone}
               company={client?.company}
+              photoURL={client?.photoURL || client?.avatar}
               address={job.address || client?.address || "Pickup at Kadawatha Hub"}
             />
           </DetailFieldGroup>

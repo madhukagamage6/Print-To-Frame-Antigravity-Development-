@@ -30,6 +30,7 @@ import { initAuth, logout, emailLogin, emailRegister, db } from "./services/fire
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
 import { subscribeToCollection, addDocument, updateDocument, COLLECTIONS } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
+import { UserAvatar } from "./components/common/ui";
 
 // Components
 const Dashboard = React.lazy(() => import("./components/dashboard/Dashboard"));
@@ -38,7 +39,6 @@ const Deals = React.lazy(() => import("./components/crm/Deals"));
 const Invoices = React.lazy(() => import("./components/crm/Invoices"));
 const Customers = React.lazy(() => import("./components/crm/Customers"));
 const Partners = React.lazy(() => import("./components/crm/Partners"));
-const ExecutionPlan = React.lazy(() => import("./components/operations/ExecutionPlan"));
 const FabricationWorks = React.lazy(() => import("./components/operations/FabricationWorks"));
 const Logistics = React.lazy(() => import("./components/operations/Logistics"));
 const CostCalculator = React.lazy(() => import("./components/tools/CostCalculator"));
@@ -566,11 +566,6 @@ function App() {
     }
   };
 
-  // Reset live datasets back to initial demo defaults
-  const resetDemoData = () => {
-    alert("Demo data reset is disabled. All data is now securely stored in Firestore.");
-  };
-
   if (!isFirebaseReady) {
     return <LoadingSpinner fullScreen message="Initializing system..." />;
   }
@@ -671,9 +666,8 @@ function App() {
           )}
 
           {/* Operations Group */}
-          {(canAccess(currentUser?.role, 'roadmap') || canAccess(currentUser?.role, 'projects') || canAccess(currentUser?.role, 'logistics')) && (
+          {(canAccess(currentUser?.role, 'projects') || canAccess(currentUser?.role, 'logistics')) && (
             <NavGroup title="Operations" isOpen={navGroupsOpen.ops} onToggle={() => toggleGroup("ops")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'roadmap') && <NavLink icon={Map} label="Execution Plan" id="roadmap" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
               {canAccess(currentUser?.role, 'projects') && <NavLink icon={Hammer} label="Fabrication Works" id="projects" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
               {canAccess(currentUser?.role, 'logistics') && <NavLink icon={Truck} label="Logistics" id="logistics" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} />}
             </NavGroup>
@@ -718,8 +712,8 @@ function App() {
         </button>
         )}
         
-        {/* User Session profile and Reset button */}
-        <div className={`text-[10px] text-on-surface-variant border-t border-outline-variant/30 transition-all duration-300 ${effectivelyCollapsed ? "p-3 flex flex-col items-center space-y-4" : "p-4 md:p-6 [@media(max-height:500px)]:p-2"}`}>
+        {/* User Session profile and Theme Switcher */}
+        <div className={`text-[10px] text-on-surface-variant border-t border-outline-variant/30 transition-all duration-300 ${effectivelyCollapsed ? "p-3 flex flex-col items-center space-y-3" : "p-4 md:p-5 [@media(max-height:500px)]:p-2 space-y-3"}`}>
           {effectivelyCollapsed ? (
             <>
               {/* Compact Profile Avatar */}
@@ -728,17 +722,7 @@ function App() {
                 className="relative group cursor-pointer"
                 title="View & Edit My Profile"
               >
-                {currentUser?.photoURL ? (
-                  <img 
-                    src={currentUser.photoURL} 
-                    alt={currentUser.name} 
-                    className="w-10 h-10 rounded-xl object-cover border border-primary/40 shadow-[0_0_10px_rgba(0,218,243,0.2)]" 
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center font-bold text-primary text-sm uppercase shadow-[0_0_10px_rgba(0,218,243,0.2)] group-hover:ring-2 group-hover:ring-primary transition-all">
-                    {currentUser.name?.charAt(0) || "U"}
-                  </div>
-                )}
+                <UserAvatar user={currentUser} size="md" showStatus status="active" />
                 {/* Floating Profile Info Tooltip */}
                 <div className="absolute left-full ml-3 bottom-0 px-3 py-2 bg-surface-container-highest text-on-surface text-xs rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 whitespace-nowrap z-50 border border-outline-variant/50">
                   <p className="font-bold">{currentUser.name || "Unknown User"}</p>
@@ -756,36 +740,17 @@ function App() {
               >
                 {theme === 'dark' ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-primary" />}
               </button>
-
-              {/* Compact Reset Button */}
-              <button
-                onClick={resetDemoData}
-                title="Reset demo data"
-                className="w-10 h-10 rounded-xl bg-surface-container-high text-on-surface hover:bg-outline-variant flex items-center justify-center transition-all duration-200 cursor-pointer"
-              >
-                <RefreshCw size={14} className="text-on-surface-variant" />
-              </button>
             </>
           ) : (
             <>
               <div 
                 onClick={() => setActiveTab('profile')}
-                className="flex items-center space-x-3 mb-2 md:mb-4 bg-surface-container hover:bg-surface-container-high p-2 md:p-3 rounded-xl ring-1 ring-outline-variant/50 hover:ring-primary/50 transition-all cursor-pointer group [@media(max-height:500px)]:mb-1"
+                className="flex items-center space-x-3 bg-surface-container hover:bg-surface-container-high p-2.5 rounded-2xl ring-1 ring-outline-variant/50 hover:ring-primary/50 transition-all cursor-pointer group"
                 title="Click to view and manage your profile"
               >
-                {currentUser?.photoURL ? (
-                  <img 
-                    src={currentUser.photoURL} 
-                    alt={currentUser.name} 
-                    className="w-9 h-9 rounded-lg object-cover border border-primary/40 shadow-[0_0_10px_rgba(0,218,243,0.2)]" 
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 group-hover:bg-primary/30 flex items-center justify-center font-bold text-primary text-xs uppercase shadow-[0_0_10px_rgba(0,218,243,0.2)] transition-colors">
-                    {currentUser.name?.charAt(0) || "U"}
-                  </div>
-                )}
+                <UserAvatar user={currentUser} size="md" showStatus status="active" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-on-surface font-bold truncate group-hover:text-primary transition-colors">{currentUser.name || "Unknown User"}</p>
+                  <p className="text-on-surface font-bold truncate group-hover:text-primary transition-colors text-xs">{currentUser.name || "Unknown User"}</p>
                   <p className="text-primary font-medium uppercase tracking-tighter text-[8px] opacity-80">
                     {currentUser.role || "No Role"} • Profile
                   </p>
@@ -795,7 +760,7 @@ function App() {
               {/* Expanded Theme Switcher (Item 21) */}
               <button
                 onClick={toggleTheme}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-surface-container border border-outline-variant/60 hover:border-primary/40 text-on-surface text-xs font-bold transition-all mb-2 cursor-pointer"
+                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-surface-container border border-outline-variant/60 hover:border-primary/40 text-on-surface text-xs font-bold transition-all cursor-pointer"
                 title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
               >
                 <div className="flex items-center gap-2">
@@ -805,17 +770,9 @@ function App() {
                 <span className="text-[9px] uppercase tracking-widest text-on-surface-variant font-mono">{theme}</span>
               </button>
 
-              <div className="[@media(max-height:500px)]:hidden">
-                <p className="font-bold mb-1">Print To Frame Pvt Ltd</p>
-                <p>Kadawatha, Sri Lanka</p>
-              </div>
-              <div className="mt-3 [@media(max-height:500px)]:hidden">
-                <button
-                  onClick={resetDemoData}
-                  className="w-full text-[11px] px-3 py-2 rounded bg-surface-container-high text-on-surface hover:bg-outline-variant font-bold transition-colors cursor-pointer"
-                >
-                  Reset demo data
-                </button>
+              <div className="[@media(max-height:500px)]:hidden text-center pt-1 border-t border-outline-variant/20">
+                <p className="font-bold text-[10px] text-on-surface-variant">Print To Frame Pvt Ltd</p>
+                <p className="text-[9px] text-on-surface-variant/60">Kadawatha, Sri Lanka</p>
               </div>
             </>
           )}
@@ -927,8 +884,6 @@ function App() {
               dataStore={dataStore}
             />
           )}
-
-          {activeTab === "roadmap" && canAccess(currentUser?.role, 'roadmap') && <ExecutionPlan />}
 
           {activeTab === "projects" && canAccess(currentUser?.role, 'projects') && (
             <FabricationWorks

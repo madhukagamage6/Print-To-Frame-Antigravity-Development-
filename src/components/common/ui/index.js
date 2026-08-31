@@ -3,4 +3,6 @@ export { default as FilterBar } from './FilterBar';
 export { default as StatusBadge } from './StatusBadge';
 export { default as KanbanColumn } from './KanbanColumn';
 export { default as KanbanCard } from './KanbanCard';
+export { default as UserAvatar } from './UserAvatar';
+export { default as ImageCropModal } from './ImageCropModal';
 export * from './detail-modal';

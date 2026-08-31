@@ -10,7 +10,7 @@ import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { toast } from '../../utils/toast';
 import { logActivity } from '../../services/auditLog';
-import { PageHeader, StatusBadge } from '../common/ui';
+import { PageHeader, StatusBadge, ImageCropModal } from '../common/ui';
 
 const AVATAR_PRESETS = [
   { id: 'craftsman', label: 'Master Framer', bg: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40', icon: Hammer },
@@ -25,6 +25,10 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
   const [activeSection, setActiveSection] = useState('personal');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Image Crop & Adjuster state
+  const [rawImageForCrop, setRawImageForCrop] = useState(null);
+  const [showCropModal, setShowCropModal] = useState(false);
 
   // Form State initialized from currentUser
   const [formData, setFormData] = useState({
@@ -48,27 +52,43 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
   const isCustomer = ['Customer', 'Business Client'].includes(currentUser?.role);
   const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'admin';
 
-  // Handle Photo Upload
+  // Handle Photo Upload -> Opens Crop & Adjuster Modal
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image size must be less than 2MB');
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
       return;
     }
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const base64 = event.target?.result;
-      setFormData(prev => ({
-        ...prev,
-        photoURL: base64,
-        selectedPreset: '' // Clear preset if custom photo uploaded
-      }));
-      toast.success('Profile photo ready to save');
+      setRawImageForCrop(base64);
+      setShowCropModal(true);
+      // Reset input value so re-selecting same file triggers onChange
+      if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = (croppedBase64) => {
+    setFormData(prev => ({
+      ...prev,
+      photoURL: croppedBase64,
+      selectedPreset: '' // Clear preset if custom photo uploaded
+    }));
+    toast.success('Photo adjusted & cropped successfully! Click "Save Info" to apply.');
+  };
+
+  const handleReAdjustPhoto = () => {
+    if (formData.photoURL) {
+      setRawImageForCrop(formData.photoURL);
+      setShowCropModal(true);
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
   // Handle Preset Avatar Selection
@@ -194,15 +214,15 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
             {/* Background Glow Accent */}
             <div className="absolute -top-16 -right-16 w-36 h-36 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
             
-            {/* Avatar with Camera Trigger */}
-            <div className="relative inline-block mx-auto mb-4">
+            {/* Avatar with Camera Trigger & Adjust Button */}
+            <div className="relative inline-block mx-auto mb-2">
               {renderAvatar('lg')}
               
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute -bottom-2 -right-2 p-2.5 bg-primary text-on-primary rounded-2xl hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(0,218,243,0.4)] active:scale-95"
-                title="Upload Photo"
+                className="absolute -bottom-2 -right-2 p-2.5 bg-primary text-on-primary rounded-2xl hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(0,218,243,0.4)] active:scale-95 cursor-pointer"
+                title="Upload New Photo"
               >
                 <Camera size={16} />
               </button>
@@ -215,6 +235,18 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                 className="hidden"
               />
             </div>
+
+            {formData.photoURL && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={handleReAdjustPhoto}
+                  className="text-[10px] font-bold text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Sparkles size={11} /> Crop & Adjust Placement
+                </button>
+              </div>
+            )}
 
             <h2 className="text-xl font-black text-on-surface tracking-tight truncate">
               {formData.name || currentUser?.name || 'Authorized Member'}
@@ -761,6 +793,14 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
         </div>
 
       </div>
+
+      {/* Interactive Avatar Crop & Adjuster Modal */}
+      <ImageCropModal
+        isOpen={showCropModal}
+        imageSrc={rawImageForCrop}
+        onCropComplete={handleCropComplete}
+        onClose={() => setShowCropModal(false)}
+      />
     </div>
   );
 }

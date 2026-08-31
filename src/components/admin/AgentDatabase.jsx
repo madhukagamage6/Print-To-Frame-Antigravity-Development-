@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Search, Shield, User, Mail, Briefcase, Plus, Check, X, Trash2, 
   KeyRound, Clock, Edit2, Save, ChevronRight, Phone, ShieldCheck,
-  UserCheck, AlertCircle
+  UserCheck, AlertCircle, Camera, Sparkles
 } from 'lucide-react';
 import Card from '../common/Card';
 import DeleteModal from '../common/DeleteModal';
@@ -10,7 +10,7 @@ import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { toast } from '../../utils/toast';
 import { subscribeToCollection, COLLECTIONS } from '../../services/firestoreSync';
-import { PageHeader, FilterBar, StatusBadge, ModalWrapper } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, ImageCropModal } from '../common/ui';
 
 export default function AgentDatabase({ users = [], setUsers, pendingUsers = [], setPendingUsers, currentUser, onApprove, onReject }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,6 +21,11 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [auditLogs, setAuditLogs] = useState([]);
+  const photoInputRef = useRef(null);
+
+  // Image Crop Modal state
+  const [rawImageForCrop, setRawImageForCrop] = useState(null);
+  const [showCropModal, setShowCropModal] = useState(false);
 
   // Invite Modal State (Item 18)
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -37,6 +42,34 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
   }, []);
 
   const isAdmin = currentUser?.role === 'Admin';
+
+  const handleAgentPhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setRawImageForCrop(event.target?.result);
+      setShowCropModal(true);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAgentCropComplete = async (croppedBase64) => {
+    if (!selectedAgent) return;
+    try {
+      await updateDoc(doc(db, "users", selectedAgent.identifier), { photoURL: croppedBase64 });
+      setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, photoURL: croppedBase64 } : u));
+      setSelectedAgent(prev => ({ ...prev, photoURL: croppedBase64 }));
+      toast.success("Profile photo updated successfully!");
+    } catch (err) {
+      toast.error("Failed to update photo: " + err.message);
+    }
+  };
 
   const getRoleCategory = (role) => {
     const r = role?.toLowerCase() || '';
@@ -289,15 +322,7 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
                         : 'hover:bg-surface-container-high/40 border-l-4 border-transparent'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 border ${
-                      isAdminRole 
-                        ? 'bg-primary/15 text-primary border-primary/30' 
-                        : isPartnerRole 
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                        : 'bg-surface-container-high text-on-surface border-outline-variant/50'
-                    }`}>
-                      {u.name?.charAt(0)?.toUpperCase() || <User size={16} />}
-                    </div>
+                    <UserAvatar user={u} size="md" showStatus />
                     <div className="min-w-0 flex-1">
                       <div className="flex justify-between items-center mb-0.5">
                         <p className="text-xs font-bold text-on-surface truncate">{u.name}</p>
@@ -322,14 +347,27 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
               <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
                   <div className="flex items-start space-x-5">
-                    <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center font-black text-2xl sm:text-3xl flex-shrink-0 shadow-md border ${
-                      selectedAgent.role === 'Admin' 
-                        ? 'bg-primary/15 text-primary border-primary/30' 
-                        : selectedAgent.role === 'Partner' 
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                        : 'bg-surface-container-high text-on-surface border-outline-variant/50'
-                    }`}>
-                      {selectedAgent.name?.charAt(0)?.toUpperCase() || <User size={32} />}
+                    <div className="relative group">
+                      <UserAvatar user={selectedAgent} size="xl" showStatus className="shadow-md" />
+                      {isAdmin && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => photoInputRef.current?.click()}
+                            className="absolute -bottom-1 -right-1 p-2 bg-primary text-on-primary rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(0,218,243,0.4)] active:scale-95 cursor-pointer"
+                            title="Update Profile Photo"
+                          >
+                            <Camera size={14} />
+                          </button>
+                          <input
+                            ref={photoInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAgentPhotoUpload}
+                            className="hidden"
+                          />
+                        </>
+                      )}
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -660,6 +698,14 @@ export default function AgentDatabase({ users = [], setUsers, pendingUsers = [],
           </form>
         </ModalWrapper>
       )}
+
+      {/* Image Crop & Adjuster Modal */}
+      <ImageCropModal
+        isOpen={showCropModal}
+        imageSrc={rawImageForCrop}
+        onCropComplete={handleAgentCropComplete}
+        onClose={() => setShowCropModal(false)}
+      />
     </div>
   );
 }

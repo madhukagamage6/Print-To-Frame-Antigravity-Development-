@@ -7,7 +7,7 @@ import {
 import { generateText } from '../../services/gemini';
 import { toast } from '../../utils/toast';
 import DeleteModal from '../common/DeleteModal';
-import { PageHeader, FilterBar, StatusBadge, ModalWrapper } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar } from '../common/ui';
 
 export default function Partners({ partners = [], setPartners, dataStore, currentUser }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -227,15 +227,7 @@ export default function Partners({ partners = [], setPartners, dataStore, curren
                         : 'hover:bg-surface-container-high/40 border-l-4 border-transparent'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm border ${
-                      isAgency 
-                        ? 'bg-primary/15 text-primary border-primary/30' 
-                        : isPrinter 
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    }`}>
-                      {p.name?.charAt(0)?.toUpperCase() || 'P'}
-                    </div>
+                    <UserAvatar user={{ ...p, role: 'partner' }} size="md" />
 
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center gap-1 mb-0.5">
@@ -271,15 +263,7 @@ export default function Partners({ partners = [], setPartners, dataStore, curren
               <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
                   <div className="flex items-start space-x-5">
-                    <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center font-black text-2xl sm:text-3xl flex-shrink-0 shadow-md border ${
-                      selectedPartner.type === 'Agency' 
-                        ? 'bg-primary/15 text-primary border-primary/30' 
-                        : selectedPartner.type === 'Printer' 
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    }`}>
-                      {selectedPartner.name?.charAt(0)?.toUpperCase() || 'P'}
-                    </div>
+                    <UserAvatar user={{ ...selectedPartner, role: 'partner' }} size="xl" className="shadow-md" />
 
                     <div>
                       <div className="flex items-center gap-2.5 flex-wrap mb-1">
