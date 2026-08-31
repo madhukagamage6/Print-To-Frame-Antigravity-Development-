@@ -32,7 +32,7 @@ import FrameBlueprintPreview from '../common/FrameBlueprintPreview';
 import FabricationCardDetails from './FabricationCardDetails';
 import { PageHeader, FilterBar, StatusBadge, KanbanColumn, KanbanCard, ModalWrapper } from '../common/ui';
 import { addDocument, updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
-import { stripEmojis } from '../../utils/validation';
+import { stripEmojis, sanitizeTechnicalScope } from '../../utils/validation';
 
 const STAGES = ["Pending", "Ongoing", "Ready For Inspection", "Revision", "Completed"];
 
@@ -303,16 +303,16 @@ export default function FabricationWorks({
 
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
-  const [deleteJobNo, setDeleteJobNo] = useState(null);
+  const [deletingJobId, setDeletingJobId] = useState(null);
 
   // Client WhatsApp Update message state
   const [isGeneratingUpdate, setIsGeneratingUpdate] = useState(false);
   const [updatingJobId, setUpdatingJobId] = useState(null);
-  const [whatsappUpdateText, setWhatsappUpdateText] = useState("");
+  const [whatsappUpdate, setWhatsappUpdate] = useState("");
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   const handleAddNew = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!form.scope.trim()) {
       toast.error("Please provide at least a brief scope for the fabrication job.");
       return;
@@ -815,7 +815,7 @@ export default function FabricationWorks({
               Cancel
             </button>
             <button
-              onClick={handleCreateJob}
+              onClick={handleAddNew}
               className="px-6 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-xs hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(0,218,243,0.2)] active:scale-95"
             >
               Generate Work Order
