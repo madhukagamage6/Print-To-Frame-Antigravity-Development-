@@ -3,7 +3,7 @@
   "appId": "1:1040802185414:web:c8ac3a614f4efe9d3397c7",
   "apiKey": "AIzaSyCkSe1u8QNM_05D_3AXytHRnwBj22SG_jA",
   "authDomain": "print-to-frame-erp.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-printtoframeerp-66900443-b6c9-4743-892c-f50b58bf8595",
+  "firestoreDatabaseId": "(default)",
   "storageBucket": "print-to-frame-erp.firebasestorage.app",
   "messagingSenderId": "1040802185414",
   "measurementId": "",

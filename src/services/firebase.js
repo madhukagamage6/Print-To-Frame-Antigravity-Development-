@@ -23,7 +23,16 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+const getDatabaseInstance = () => {
+  const dbId = firebaseConfig.firestoreDatabaseId;
+  if (!dbId || dbId === '(default)' || dbId.trim() === '') {
+    return getFirestore(app);
+  }
+  return getFirestore(app, dbId);
+};
+
+export const db = getDatabaseInstance();
 export const auth = getAuth(app);
 
 // Google Workspace Scopes

@@ -68,6 +68,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Quotations ────────────────────────────────────────
+    match /quotations/{quotationId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // ── Invoices ─────────────────────────────────────────
     match /invoices/{invoiceId} {
       // Invoices can be read if the role has full invoice access, OR if the invoice belongs to the user
