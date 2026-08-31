@@ -98,11 +98,18 @@ export default function EmailTemplateModal({
     }
   };
 
+  const handleOpenGmailWeb = () => {
+    const toEmail = recipient?.identifier || recipient?.email || '';
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(toEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+    toast.success('Opening Gmail draft in new browser tab...');
+  };
+
   const handleOpenMailClient = () => {
     const toEmail = recipient?.identifier || recipient?.email || '';
     const mailtoUrl = `mailto:${encodeURIComponent(toEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(mailtoUrl, '_blank');
-    toast.info('Opening in your system mail application...');
+    toast.info('Opening in default mail application...');
   };
 
   if (!isOpen) return null;
@@ -262,10 +269,21 @@ export default function EmailTemplateModal({
           <button
             type="button"
             onClick={handleOpenMailClient}
+            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant/60 font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            title="Open in default desktop mail application (Apple Mail, Outlook, Thunderbird)"
+          >
+            <ExternalLink size={14} />
+            <span>Default Mail Client</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenGmailWeb}
             className="flex-1 sm:flex-none px-5 py-2.5 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.3)] active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+            title="Open pre-filled draft in Gmail Web browser tab"
           >
             <Send size={14} />
-            <span>Open in Mail App</span>
+            <span>Open in Gmail (Web)</span>
           </button>
         </div>
       </div>

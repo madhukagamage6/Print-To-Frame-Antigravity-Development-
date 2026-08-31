@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { User, Shield, Hammer, Palette, Briefcase, Layers, Sparkles } from 'lucide-react';
 
 const SIZE_CLASSES = {
@@ -28,6 +28,10 @@ const PRESET_ICONS = {
 
 export default function UserAvatar({
   user = {},
+  photoURL: directPhotoURL,
+  avatar: directAvatar,
+  name: directName,
+  role: directRole,
   size = 'md',
   className = '',
   showStatus = false,
@@ -37,16 +41,22 @@ export default function UserAvatar({
 }) {
   const [imageError, setImageError] = useState(false);
 
-  // Normalize user data (supports object or direct string)
+  // Normalize user data (supports direct object, string, or individual props)
   const userData = typeof user === 'string' 
     ? { name: user, photoURL: user.startsWith('http') || user.startsWith('data:') ? user : null } 
     : user || {};
 
-  const name = userData.name || userData.clientName || userData.company || userData.identifier || 'User';
-  const role = userData.role?.toLowerCase() || '';
-  const photoURL = !imageError ? (userData.photoURL || userData.avatar || userData.photo || null) : null;
+  const name = directName || userData.name || userData.clientName || userData.company || userData.identifier || 'User';
+  const role = (directRole || userData.role || '').toLowerCase();
+  const rawPhoto = directPhotoURL || directAvatar || userData.photoURL || userData.avatar || userData.photo || null;
+  const photoURL = !imageError ? rawPhoto : null;
   const selectedPreset = userData.selectedPreset || null;
   const PresetIcon = selectedPreset ? PRESET_ICONS[selectedPreset] : null;
+
+  // Reset image error state whenever the photo source changes
+  React.useEffect(() => {
+    setImageError(false);
+  }, [rawPhoto]);
 
   // Role-based styling when displaying initials
   const getRoleStyle = (r) => {

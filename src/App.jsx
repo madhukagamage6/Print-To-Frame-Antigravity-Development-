@@ -456,7 +456,24 @@ function App() {
       // Firestore rules already allow all authenticated users to read /users/*.
       unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         const u = [];
-        snapshot.forEach(doc => u.push(doc.data()));
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          u.push(data);
+          if (currentUser?.identifier && data.identifier === currentUser.identifier) {
+            setCurrentUser(prev => {
+              if (!prev) return data;
+              if (
+                prev.photoURL !== data.photoURL || 
+                prev.role !== data.role || 
+                prev.name !== data.name ||
+                prev.selectedPreset !== data.selectedPreset
+              ) {
+                return { ...prev, ...data };
+              }
+              return prev;
+            });
+          }
+        });
         setUsers(u);
       });
     }
