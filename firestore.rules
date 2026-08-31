@@ -21,16 +21,35 @@ service cloud.firestore {
       return hasRole('admin') || hasRole('Admin');
     }
 
-    // Dynamic Permission Check
+    // Dynamic Permission Check (supports both new granular {view, create, edit, delete, export} and legacy {read, write})
     function checkPermission(module, action) {
       return isAdmin() || (
         isAuthenticated() 
         && exists(/databases/$(database)/documents/users/$(request.auth.token.email))
         && exists(/databases/$(database)/documents/settings/permissions)
-        && get(/databases/$(database)/documents/settings/permissions).data
-             .get(get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role, {})
-             .get(module, {})
-             .get(action, false) == true
+        && (
+             // Direct key match (e.g. view, create, edit, delete, export, read, write)
+             get(/databases/$(database)/documents/settings/permissions).data
+               .get(get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role, {})
+               .get(module, {})
+               .get(action, false) == true
+             // If checking 'read', also accept 'view'
+             || (action == 'read' && get(/databases/$(database)/documents/settings/permissions).data
+                  .get(get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role, {})
+                  .get(module, {})
+                  .get('view', false) == true)
+             // If checking 'write', also accept 'create' or 'edit'
+             || (action == 'write' && (
+                  get(/databases/$(database)/documents/settings/permissions).data
+                    .get(get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role, {})
+                    .get(module, {})
+                    .get('create', false) == true
+                  || get(/databases/$(database)/documents/settings/permissions).data
+                    .get(get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role, {})
+                    .get(module, {})
+                    .get('edit', false) == true
+                ))
+        )
       );
     }
 
@@ -55,16 +74,16 @@ service cloud.firestore {
 
     // ── Leads (CRM) ──────────────────────────────────────
     match /leads/{leadId} {
-      allow read: if checkPermission('leads', 'read');
-      allow create: if checkPermission('leads', 'write') || (request.resource.data.source == 'Referral');
-      allow update: if checkPermission('leads', 'write');
+      allow read: if checkPermission('leads', 'view') || checkPermission('leads', 'read');
+      allow create: if checkPermission('leads', 'create') || checkPermission('leads', 'write') || (request.resource.data.source == 'Referral');
+      allow update: if checkPermission('leads', 'edit') || checkPermission('leads', 'write');
       allow delete: if isAdmin();
     }
 
     // ── Deals ────────────────────────────────────────────
     match /deals/{dealId} {
-      allow read: if checkPermission('pipeline', 'read');
-      allow create, update: if checkPermission('pipeline', 'write');
+      allow read: if checkPermission('pipeline', 'view') || checkPermission('pipeline', 'read');
+      allow create, update: if checkPermission('pipeline', 'create') || checkPermission('pipeline', 'edit') || checkPermission('pipeline', 'write');
       allow delete: if isAdmin();
     }
 
@@ -75,37 +94,36 @@ service cloud.firestore {
 
     // ── Invoices ─────────────────────────────────────────
     match /invoices/{invoiceId} {
-      // Invoices can be read if the role has full invoice access, OR if the invoice belongs to the user
-      allow read: if checkPermission('invoices', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email) || (isAuthenticated() && resource.data.partnerId == request.auth.token.email);
-      allow create, update: if checkPermission('invoices', 'write');
+      allow read: if checkPermission('invoices', 'view') || checkPermission('invoices', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email) || (isAuthenticated() && resource.data.partnerId == request.auth.token.email);
+      allow create, update: if checkPermission('invoices', 'create') || checkPermission('invoices', 'edit') || checkPermission('invoices', 'write');
       allow delete: if isAdmin();
     }
 
     // ── Customers ────────────────────────────────────────
     match /customers/{customerId} {
-      allow read: if checkPermission('customers', 'read');
-      allow create, update: if checkPermission('customers', 'write');
+      allow read: if checkPermission('customers', 'view') || checkPermission('customers', 'read');
+      allow create, update: if checkPermission('customers', 'create') || checkPermission('customers', 'edit') || checkPermission('customers', 'write');
       allow delete: if isAdmin();
     }
 
     // ── Partners & Commission Ledgers ────────────────────
     match /partners/{partnerId} {
-      allow read: if checkPermission('partners', 'read') || (isAuthenticated() && partnerId == request.auth.token.email);
-      allow create, update: if checkPermission('partners', 'write');
+      allow read: if checkPermission('partners', 'view') || checkPermission('partners', 'read') || (isAuthenticated() && partnerId == request.auth.token.email);
+      allow create, update: if checkPermission('partners', 'create') || checkPermission('partners', 'edit') || checkPermission('partners', 'write');
       allow delete: if isAdmin();
     }
 
     // ── Fabrication / Projects ───────────────────────────
     match /projects/{projectId} {
-      allow read: if checkPermission('projects', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email);
-      allow create, update: if checkPermission('projects', 'write');
+      allow read: if checkPermission('projects', 'view') || checkPermission('projects', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email);
+      allow create, update: if checkPermission('projects', 'create') || checkPermission('projects', 'edit') || checkPermission('projects', 'write');
       allow delete: if isAdmin();
     }
 
     // ── Logistics ────────────────────────────────────────
     match /logistics/{logId} {
-      allow read: if checkPermission('logistics', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email);
-      allow create, update: if checkPermission('logistics', 'write');
+      allow read: if checkPermission('logistics', 'view') || checkPermission('logistics', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email);
+      allow create, update: if checkPermission('logistics', 'create') || checkPermission('logistics', 'edit') || checkPermission('logistics', 'write');
       allow delete: if isAdmin();
     }
 
@@ -115,10 +133,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ── Messages ─────────────────────────────────────────
+    // ── Messages (Real-Time Internal Chat) ─────────────────
     match /messages/{messageId} {
-      allow read: if checkPermission('messages', 'read');
-      allow create, update: if checkPermission('messages', 'write') || checkPermission('messages', 'read');
+      // Any authenticated user who is a participant OR has messages access can read & write
+      allow read: if isAuthenticated() && (
+        checkPermission('messages', 'view') ||
+        checkPermission('messages', 'read') ||
+        (resource != null && request.auth.token.email in resource.data.participants)
+      );
+      allow create: if isAuthenticated() && (
+        checkPermission('messages', 'create') ||
+        checkPermission('messages', 'write') ||
+        checkPermission('messages', 'view') ||
+        request.auth.token.email in request.resource.data.participants
+      );
+      allow update: if isAuthenticated() && (
+        checkPermission('messages', 'edit') ||
+        checkPermission('messages', 'write') ||
+        request.auth.token.email in resource.data.participants
+      );
       allow delete: if isAdmin() || (
         isAuthenticated() &&
         resource.data.fromId == request.auth.token.email &&
@@ -129,7 +162,7 @@ service cloud.firestore {
     // ── Typing Indicators ────────────────────────────────
     match /typing_indicators/{indicatorId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && indicatorId == request.auth.token.email;
+      allow write: if isAuthenticated();
     }
 
     // ── Audit Log ────────────────────────────────────────

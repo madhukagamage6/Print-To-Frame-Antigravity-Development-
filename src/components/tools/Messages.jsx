@@ -10,7 +10,7 @@ import { UserAvatar } from "../common/ui";
 // Helper to sort and create channel IDs (e.g. user1_user2)
 function getChannelId(id1, id2) {
   if (!id1 || !id2) return null;
-  return [id1, id2].sort().join("_");
+  return [String(id1).trim().toLowerCase(), String(id2).trim().toLowerCase()].sort().join("_");
 }
 
 const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
@@ -21,7 +21,7 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   const [unreadCounts, setUnreadCounts] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   
-  // Fake presence state (we will simulate presence based on lastActive or just randomly for now, ideally this would be real DB presence)
+  // Presence simulation state
   const [presenceState, setPresenceState] = useState({});
 
   const chatContainerRef = useRef(null);
@@ -31,9 +31,11 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   useEffect(() => {
     if (!currentUser?.identifier) return;
 
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+
     const q = query(
       collection(db, COLLECTIONS.MESSAGES),
-      where('participants', 'array-contains', currentUser.identifier)
+      where('participants', 'array-contains', myId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -42,25 +44,23 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
         fetchedMessages.push({ _firestoreId: docSnap.id, ...docSnap.data() });
       });
       
-      // Sort by timestamp manually since we can't easily compound order by with array-contains in all DBs without index
-      fetchedMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      fetchedMessages.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
       setMessages(fetchedMessages);
+    }, (err) => {
+      console.warn("Messages snapshot subscription notice:", err.message);
     });
 
     return () => unsubscribe();
   }, [currentUser]);
 
   // Presence simulation & typing via a unified 'presence' document or just simple timeouts
-  // For production, consider using Firebase Realtime Database for presence.
   useEffect(() => {
     if (!currentUser) return;
     
-    // Simulate all users as online for demo purposes since presence in Firestore is expensive
     const pState = {};
     users.forEach(u => pState[u.identifier] = { status: 'online' });
     setPresenceState(pState);
     
-    // Fake typing listener based on a global typing document
     const typingUnsub = onSnapshot(collection(db, 'typing_indicators'), (snap) => {
       const typingData = {};
       snap.forEach(d => {
@@ -70,7 +70,7 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
         }
       });
       setTypingState(typingData);
-    });
+    }, () => {});
     return () => typingUnsub();
   }, [currentUser, users]);
 
@@ -85,15 +85,17 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   useEffect(() => {
     if (!currentUser) return;
 
+    const myId = String(currentUser.identifier).trim().toLowerCase();
     const counts = {};
     users.forEach((u) => {
-      if (u.identifier === currentUser.identifier) return;
+      const uId = String(u.identifier).trim().toLowerCase();
+      if (uId === myId) return;
       
-      const chan = getChannelId(currentUser.identifier, u.identifier);
+      const chan = getChannelId(myId, uId);
       const chanMsgs = messages.filter((m) => m.channelId === chan);
       
       const unread = chanMsgs.filter(
-        (m) => m.fromId === u.identifier && !(m.readBy || []).includes(currentUser.identifier)
+        (m) => String(m.fromId).trim().toLowerCase() === uId && !(m.readBy || []).map(r => String(r).toLowerCase()).includes(myId)
       ).length;
       
       counts[u.identifier] = unread;
@@ -111,16 +113,18 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   useEffect(() => {
     if (!currentUser || !messages.length) return;
 
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+
     if (messages.length > lastMsgCountRef.current) {
       const newMsgs = messages.slice(lastMsgCountRef.current);
       newMsgs.forEach((msg) => {
+        const msgFrom = String(msg.fromId).trim().toLowerCase();
         // If it's sent to me and I didn't send it
-        if (msg.fromId !== currentUser.identifier && !(msg.readBy || []).includes(currentUser.identifier)) {
-          // If we aren't currently looking at this chat
-          if (activeUser?.identifier !== msg.fromId) {
-            const sender = users.find(u => u.identifier === msg.fromId);
+        if (msgFrom !== myId && !(msg.readBy || []).map(r => String(r).toLowerCase()).includes(myId)) {
+          if (String(activeUser?.identifier).trim().toLowerCase() !== msgFrom) {
+            const sender = users.find(u => String(u.identifier).trim().toLowerCase() === msgFrom);
             const title = `Message from ${sender?.name || msg.fromId}`;
-            const body = msg.text ? (msg.text.substring(0, 100) + (msg.text.length > 100 ? "..." : "")) : "Sent an image";
+            const body = msg.text ? (msg.text.substring(0, 100) + (msg.text.length > 100 ? "..." : "")) : "Sent an attachment";
             
             toast.info(title + ": " + body);
             if (triggerBrowserNotification) {
@@ -137,29 +141,32 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   useEffect(() => {
     if (!currentUser || !activeUser || !messages.length) return;
 
-    const activeChan = getChannelId(currentUser.identifier, activeUser.identifier);
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+    const activeChan = getChannelId(myId, activeUser.identifier);
     const unread = messages.filter(
-      (m) => m.channelId === activeChan && m.fromId === activeUser.identifier && !(m.readBy || []).includes(currentUser.identifier)
+      (m) => m.channelId === activeChan && String(m.fromId).trim().toLowerCase() !== myId && !(m.readBy || []).map(r => String(r).toLowerCase()).includes(myId)
     );
 
     if (unread.length) {
       unread.forEach(m => {
         const readBy = m.readBy || [];
-        updateDocument(COLLECTIONS.MESSAGES, m._firestoreId, {
-          readBy: [...readBy, currentUser.identifier]
-        });
+        if (!readBy.map(r => String(r).toLowerCase()).includes(myId)) {
+          updateDocument(COLLECTIONS.MESSAGES, m._firestoreId, {
+            readBy: [...readBy, myId]
+          }).catch(e => console.warn("Read sync error:", e));
+        }
       });
     }
   }, [messages, currentUser, activeUser]);
 
   const sendTypingIndicator = (isTyping) => {
     if (!activeUser || !currentUser) return;
-    const activeChan = getChannelId(currentUser.identifier, activeUser.identifier);
-    // Best effort typing indicator — use setDocument (merge:true) so it creates the doc
-    // if it doesn't exist yet (updateDoc would throw on a missing document)
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+    const targetId = String(activeUser.identifier).trim().toLowerCase();
+    const activeChan = getChannelId(myId, targetId);
     try {
-      setDocument('typing_indicators', currentUser.identifier, {
-        fromId: currentUser.identifier,
+      setDocument('typing_indicators', myId, {
+        fromId: myId,
         channelId: activeChan,
         isTyping,
         timestamp: Date.now()
@@ -170,19 +177,19 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   const handleSendMessage = async () => {
     if (!inputText.trim() || !activeUser || !currentUser) return;
 
-    const activeChan = getChannelId(currentUser.identifier, activeUser.identifier);
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+    const targetId = String(activeUser.identifier).trim().toLowerCase();
+    const activeChan = getChannelId(myId, targetId);
     
     const newMsg = {
       channelId: activeChan,
-      participants: [currentUser.identifier, activeUser.identifier],
-      fromId: currentUser.identifier,
-      toId: activeUser.identifier,
+      participants: [myId, targetId],
+      fromId: myId,
+      toId: targetId,
+      senderName: currentUser.name || myId,
       text: inputText.trim(),
-      // IMPORTANT: Keep as Date.now() (plain ms number). The firestore.rules deletion window
-      // rule does arithmetic: (request.time.toMillis() - resource.data.timestamp) < 900000.
-      // Using serverTimestamp() here would break that rule since it returns a Timestamp object.
       timestamp: Date.now(),
-      readBy: [currentUser.identifier], // I've read my own message
+      readBy: [myId],
       replyTo: replyTo ? {
         id: replyTo._firestoreId,
         text: replyTo.text,
@@ -197,8 +204,8 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
     try {
       await addDocument(COLLECTIONS.MESSAGES, newMsg);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to send message");
+      console.error("Message send failure:", err);
+      toast.error("Failed to send message: " + (err.message || 'Check database permissions'));
     }
   };
 
